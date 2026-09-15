@@ -1,4 +1,5 @@
-import { useAuth } from "@/context/AuthProvider"; // Importe o hook
+import { api } from "@/Services/api";
+import type { AxiosError } from "axios";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -10,9 +11,34 @@ import {
   View,
 } from "react-native";
 
+const paraIso = (texto: string) => {
+  const partes = texto.replace(/\D/g, "");
+
+  if (partes.length !== 8) return null;
+
+  const dia = partes.slice(0, 2);
+  const mes = partes.slice(2, 4);
+  const ano = partes.slice(4);
+
+  const data = new Date(`${ano}-${mes}-${dia}T00:00:00`);
+
+  if (Number.isNaN(data.getTime())) return null;
+
+  return `${ano}-${mes}-${dia}`;
+};
+
+const temIdadeMinima = (iso: string) => {
+  const nascimento = new Date(`${iso}T00:00:00`);
+  const limite = new Date();
+
+  limite.setFullYear(limite.getFullYear() - 18);
+
+  return nascimento <= limite;
+};
+
 export default function Cadastro() {
   const router = useRouter();
-  const { register } = useAuth();
+  const [erroCadastro, setErroCadastro] = useState("");
 
   const [step, setStep] = useState(1);
 
@@ -28,10 +54,21 @@ export default function Cadastro() {
 
   const [nome, setNome] = useState("");
   const [sobreNome, setsobreNome] = useState("");
+  const [cpf, setCpf] = useState("");
+  const [nascimento, setNascimento] = useState("");
+  const [enviando, setEnviando] = useState(false);
 
   // verificar se senhas coincidem
   const senhasIguais = senha.length > 0 && senha === confirmarSenha;
-  const nomeSobrenomePreenchidos = nome.length > 0 && sobreNome.length;
+  const cpfLimpo = cpf.replace(/\D/g, "");
+  const nascimentoIso = paraIso(nascimento);
+
+  const nomeSobrenomePreenchidos =
+    nome.length > 0 &&
+    sobreNome.length > 0 &&
+    cpfLimpo.length === 11 &&
+    nascimentoIso !== null &&
+    temIdadeMinima(nascimentoIso);
 
   // step 4
   const [tipoUsuario, setTipoUsuario] = useState("");
@@ -41,23 +78,51 @@ export default function Cadastro() {
   // verificar se código tem 4 dígitos
   const codigoValido = codigo.length === 4;
 
-  const finalizarCadastro = () => {
-    if (concordo) {
-      // Cria o objeto de usuário com os dados do cadastro
-      const usuario = {
-        id: Date.now().toString(),
-        email: email,
-        nome: nome,
-        sobrenome: sobreNome,
-        tipoUsuario: tipoUsuario,
-        // Adicione outros campos que você queira salvar
-      };
+  const finalizarCadastro = async () => {
+    if (!concordo || enviando) return;
 
-      // Registra o usuário no contexto de autenticação
-      register(usuario);
+    if (nascimentoIso === null || cpfLimpo.length !== 11) {
+      setErroCadastro("Confira o CPF e a data de nascimento.");
+      setStep(4);
+      return;
+    }
 
-      // Agora sim pode redirecionar para home
-      router.replace("/home");
+    setErroCadastro("");
+    setEnviando(true);
+
+    try {
+      await api.post("/auth/register", {
+        name: `${nome} ${sobreNome}`.trim(),
+        email,
+        password: senha,
+        cpf: cpfLimpo,
+        data_nascimento: nascimentoIso,
+      });
+
+      router.replace("/login");
+    } catch (falha) {
+      const resposta = (
+        falha as AxiosError<{
+          message?: string;
+          errors?: Record<string, string[]>;
+        }>
+      )?.response;
+
+      if (resposta?.status === 429) {
+        setErroCadastro(
+          "Muitas tentativas. Aguarde um minuto e tente de novo.",
+        );
+      } else {
+        const primeiro = Object.values(resposta?.data?.errors ?? {})[0]?.[0];
+
+        setErroCadastro(
+          primeiro ??
+            resposta?.data?.message ??
+            "Não foi possível concluir o cadastro.",
+        );
+      }
+    } finally {
+      setEnviando(false);
     }
   };
 
@@ -248,6 +313,30 @@ export default function Cadastro() {
               onChangeText={setsobreNome}
             />
 
+            <TextInput
+              placeholder="CPF (somente números)"
+              className="rounded-md px-4 py-3 mb-4 text-base bg-gray-100 w-full"
+              value={cpf}
+              onChangeText={setCpf}
+              keyboardType="number-pad"
+              maxLength={14}
+            />
+
+            <TextInput
+              placeholder="Data de nascimento (DD/MM/AAAA)"
+              className="rounded-md px-4 py-3 mb-2 text-base bg-gray-100 w-full"
+              value={nascimento}
+              onChangeText={setNascimento}
+              keyboardType="number-pad"
+              maxLength={10}
+            />
+
+            {nascimentoIso !== null && !temIdadeMinima(nascimentoIso) && (
+              <Text className="text-red-500 text-xs mb-3">
+                É preciso ter pelo menos 18 anos.
+              </Text>
+            )}
+
             <View className="flex-row justify-between">
               {/* Voltar */}
               <TouchableOpacity
@@ -352,6 +441,12 @@ export default function Cadastro() {
             </Text>
 
             <View className="border-t border-gray-300 mt-6 mb-4" />
+
+            {erroCadastro.length > 0 && (
+              <View className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+                <Text className="text-red-600 text-sm">{erroCadastro}</Text>
+              </View>
+            )}
 
             <View className="flex-row justify-between items-center mb-6">
               <Text className="text-base">Concordo</Text>

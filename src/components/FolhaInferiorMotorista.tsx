@@ -37,7 +37,7 @@ export default function FolhaInferiorMotorista({
       >
         {/* Campo de pesquisa */}
         <BottomSheetView className="flex-1 items-center px-4">
-          <Text>escreva aqui, {usuario?.nome}!</Text>
+          <Text>escreva aqui, {usuario?.name}!</Text>
           {/* crie aqui */}
         </BottomSheetView>
       </BottomSheet>

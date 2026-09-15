@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Audio } from "expo-av";
+import { AudioPlayer, createAudioPlayer } from "expo-audio";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -97,7 +97,7 @@ const PulseOverlay = () => {
 const pulseStyles = StyleSheet.create({
   container: {
     // Ocupa 100% da área do pai (.card)
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: "center",
     alignItems: "center",
     // ⚠️ Importante: Garante que o pulso fique dentro do card
@@ -123,7 +123,7 @@ export default function RecebendoChamadas({
   onRecusar,
   valor = 8.20,
 }: RecebendoChamadaProps) {
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
   const progress = useRef(new Animated.Value(1)).current;
   const closedRef = useRef(false); // evita múltiplas chamadas de fechamento
   const DURATION = 10000;
@@ -144,133 +144,70 @@ export default function RecebendoChamadas({
     // 🔹 O loop de pulsação agora é gerido pelo componente PulseOverlay,
     // então removemos a lógica de `pulseAnimationRef` daqui.
 
-    let currentSound: Audio.Sound | null = null;
+    let player: AudioPlayer | null = null;
 
-    const playSound = async () => {
-      try {
-        const { sound } = await Audio.Sound.createAsync(
-          require("../../assets/TOQUE-CHAMADA.mp3"),
-          { shouldPlay: true }
-        );
+    try {
+      player = createAudioPlayer(require("../../assets/TOQUE-CHAMADA.mp3"));
+      playerRef.current = player;
 
-        currentSound = sound;
-        setSound(sound);
+      player.addListener("playbackStatusUpdate", (status) => {
+        if (!status?.didJustFinish || closedRef.current) return;
 
-        // registra callback de status
-        sound.setOnPlaybackStatusUpdate(async (status) => {
-          // status pode ser null em alguns cenários; proteja
-          if (!status) return;
+        closedRef.current = true;
+        try {
+          onRecusar();
+        } catch {}
+      });
 
-          // Se carregado e terminou, fecha o card e descarrega (apenas uma vez)
-          if (status.isLoaded && status.didJustFinish && !closedRef.current) {
-            closedRef.current = true;
-            try {
-              // chama onRecusar (fecha card)
-              onRecusar();
-            } catch (e) {
-              // não deixar erro de callback quebrar
-            }
-            // tenta parar e descarregar com segurança
-            try {
-              const s = sound;
-              if (s) {
-                const st = await s.getStatusAsync();
-                if (st.isLoaded) {
-                  await s.stopAsync().catch(() => { });
-                  await s.unloadAsync().catch(() => { });
-                }
-              }
-            } catch (e) {
-              // swallow
-            } finally {
-              setSound(null);
-            }
-          }
-        });
-        // toca
-        await sound.playAsync();
-      } catch (err) {
-        // swallow
-      }
-    };
-    playSound();
+      player.play();
+    } catch {}
 
     // cleanup do effect
     return () => {
       closedRef.current = true;
       setIsPulsing(false); // Pára o pulso ao desmontar
 
-      // para e descarrega com segurança
-      (async () => {
-        try {
-          if (currentSound) {
-            const status = await currentSound.getStatusAsync();
-            if (status.isLoaded) {
-              await currentSound.stopAsync().catch(() => { });
-              await currentSound.unloadAsync().catch(() => { });
-            }
-          }
-        } catch (e) {
-          // swallow
-        } finally {
-          setSound(null);
-        }
-      })();
+      try {
+        player?.remove(); // para e descarrega o player
+      } catch {}
+      playerRef.current = null;
     };
   }, []);
 
+  const pararSom = () => {
+    try {
+      playerRef.current?.remove();
+    } catch {}
+    playerRef.current = null;
+  };
+
   // função centralizada para fechar + parar/descarregar com proteção
-  const closeAndUnload = async () => {
+  const closeAndUnload = () => {
     if (closedRef.current) return;
     closedRef.current = true;
     setIsPulsing(false); // Pára o pulso
 
     try {
       onRecusar(); // fecha o card
-    } catch (e) {
+    } catch {
       // ignore callback errors
     }
 
-    if (!sound) {
-      setSound(null);
-      return;
-    }
-
-    try {
-      const status = await sound.getStatusAsync();
-      if (status.isLoaded) {
-        await sound.stopAsync().catch(() => { });
-        await sound.unloadAsync().catch(() => { });
-      }
-    } catch (e) {
-      // swallow
-    } finally {
-      setSound(null);
-    }
+    pararSom();
   };
 
-  const acceptAndUnload = async () => {
+  const acceptAndUnload = () => {
     // chamado ao aceitar
     if (!closedRef.current) closedRef.current = true;
     setIsPulsing(false); // Pára o pulso
 
     try {
       onAceitar();
-    } catch (e) {
+    } catch {
       // swallow
     }
-    if (sound) {
-      try {
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded) {
-          await sound.stopAsync().catch(() => { });
-          await sound.unloadAsync().catch(() => { });
-        }
-      } catch (e) {
-        // swallow
-      }
-      setSound(null);
-    }
+
+    pararSom();
   };
 
   const widthInterpolated = progress.interpolate({

@@ -12,12 +12,16 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import type { AxiosError } from "axios";
 import { useAuth } from "../context/AuthProvider";
 
 import { StatusBar } from "expo-status-bar";
 
 export default function Login() {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [erro, setErro] = useState("");
+  const [entrando, setEntrando] = useState(false);
   const { user, loading, login } = useAuth();
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -29,11 +33,23 @@ export default function Login() {
     }
   }, [user, loading, router]);
 
-  const handleLogin = () => {
-    if (username.trim().length > 0) {
-      login(username);
-    } else {
-      alert("Digite um usuário");
+  const handleLogin = async () => {
+    if (email.trim().length === 0 || senha.length === 0) {
+      setErro("Preencha e-mail e senha.");
+      return;
+    }
+
+    setErro("");
+    setEntrando(true);
+
+    try {
+      await login(email.trim(), senha);
+    } catch (falha) {
+      const resposta = (falha as AxiosError<{ message?: string }>)?.response;
+
+      setErro(resposta?.data?.message ?? "Não foi possível entrar.");
+    } finally {
+      setEntrando(false);
     }
   };
 
@@ -68,23 +84,42 @@ export default function Login() {
 
           <TextInput
             className="w-full bg-gray-200 dark:bg-gray-700 border-2 border-green-500 dark:border-green-600 rounded-full m-4 p-4 text-black dark:text-white"
-            placeholder="Digite seu usuário"
+            placeholder="Digite seu e-mail"
             placeholderTextColor={
               colorScheme === "dark" ? "#9CA3AF" : "#6B7280"
             }
-            value={username}
-            onChangeText={setUsername}
+            value={email}
+            onChangeText={setEmail}
             autoCapitalize="none"
             autoCorrect={false}
-            editable={!loading}
+            keyboardType="email-address"
+            editable={!loading && !entrando}
           />
+
+          <TextInput
+            className="w-full bg-gray-200 dark:bg-gray-700 border-2 border-green-500 dark:border-green-600 rounded-full m-4 p-4 text-black dark:text-white"
+            placeholder="Digite sua senha"
+            placeholderTextColor={
+              colorScheme === "dark" ? "#9CA3AF" : "#6B7280"
+            }
+            value={senha}
+            onChangeText={setSenha}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+            editable={!loading && !entrando}
+          />
+
+          {erro.length > 0 && (
+            <Text className="text-red-500 px-4 text-center">{erro}</Text>
+          )}
 
           <TouchableOpacity
             className="bg-blue-500 w-48 p-4 rounded-full mb-4"
             onPress={handleLogin}
-            disabled={loading}
+            disabled={loading || entrando}
           >
-            {loading ? (
+            {loading || entrando ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
               <Text className="text-white text-center font-semibold">

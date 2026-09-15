@@ -139,7 +139,7 @@ export default function NotasAgradecimento({
             <Text style={styles.text}>{data.comentario}</Text>
             
             <Text style={styles.tags}>
-                "Pontual" "Educado" "Bom condutor" "Sabe o caminho"
+                {'"Pontual" "Educado" "Bom condutor" "Sabe o caminho"'}
             </Text>
 
             <View style={styles.footer}>

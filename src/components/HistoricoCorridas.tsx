@@ -1,3 +1,4 @@
+import { useHistoricoCorridas } from "@/hooks/useHistoricoCorridas";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -28,68 +29,6 @@ interface RideHistory {
   isTip?: boolean;
 }
 
-const DATA: RideHistory[] = [
-  {
-    id: "1",
-    date: "27/01/2026",
-    time: "18:30",
-    type: "Pop",
-    paymentMethod: "cash",
-    origin: "Avenida Sete de Setembro, Nossa Sra. das Graças, Porto Velho - RO",
-    destination: "2343, Flodoaldo Pontes Pinto, Porto Velho - RO",
-    value: "R$8,30",
-    status: "Pedido finalizado",
-  },
-  {
-    id: "2",
-    date: "27/01/2026",
-    time: "18:28",
-    type: "Negocia",
-    paymentMethod: "cash",
-    origin: "Rua Paulo Leal, Nossa Senhora das Graças, Porto Velho - RO",
-    destination:
-      "Avenida Sete de Setembro, Nossa Sra. das Graças, Porto Velho - RO",
-    value: "R$6,11",
-    status: "Pedido finalizado",
-  },
-  {
-    id: "3",
-    date: "27/01/2026",
-    time: "13:52",
-    type: "Gorjeta",
-    paymentMethod: "app",
-    origin: "",
-    destination: "",
-    value: "R$2,00",
-    status: "",
-    isTip: true,
-  },
-  {
-    id: "4",
-    date: "27/01/2026",
-    time: "18:28",
-    type: "Negocia",
-    paymentMethod: "cash",
-    origin: "Rua Paulo Leal, Nossa Senhora das Graças, Porto Velho - RO",
-    destination:
-      "Avenida Sete de Setembro, Nossa Sra. das Graças, Porto Velho - RO",
-    value: "R$6,11",
-    status: "Pedido finalizado",
-  },
-  {
-    id: "5",
-    date: "27/01/2026",
-    time: "18:28",
-    type: "Negocia",
-    paymentMethod: "cash",
-    origin: "Rua Paulo Leal, Nossa Senhora das Graças, Porto Velho - RO",
-    destination:
-      "Avenida Sete de Setembro, Nossa Sra. das Graças, Porto Velho - RO",
-    value: "R$6,11",
-    status: "Pedido finalizado",
-  },
-];
-
 interface props {
   visible: boolean;
   onClose: () => void;
@@ -104,6 +43,7 @@ export default function HistoricoCorridas({
   const translateX = useRef(new Animated.Value(width)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const [isMounted, setIsMounted] = useState(visible);
+  const { itens, carregando, erro } = useHistoricoCorridas(visible);
   const [historicoCorridasDetalhes, setHistoricoCorridasDetalhes] =
     useState(false);
 
@@ -121,7 +61,7 @@ export default function HistoricoCorridas({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -275,7 +215,16 @@ export default function HistoricoCorridas({
 
           <View style={styles.body}>
             <FlatList
-              data={DATA}
+              data={itens}
+              ListEmptyComponent={
+                <Text style={styles.listaVazia}>
+                  {carregando
+                    ? "Carregando..."
+                    : erro.length > 0
+                      ? erro
+                      : "Você ainda não tem corridas."}
+                </Text>
+              }
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
               contentContainerStyle={{ paddingBottom: 20 }}
@@ -293,6 +242,12 @@ export default function HistoricoCorridas({
 }
 
 const styles = StyleSheet.create({
+  listaVazia: {
+    textAlign: "center",
+    color: "#888",
+    fontSize: 14,
+    paddingVertical: 40,
+  },
   drawer: {
     position: "absolute",
     right: 0,

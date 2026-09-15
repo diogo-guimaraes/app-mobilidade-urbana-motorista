@@ -11,6 +11,9 @@ import SolicitacoesCorrida from "@/components/SolicitacoesCorrida";
 import SolicitarCorrida from "@/components/SolicitarCorrida";
 import TopMenu from "@/components/TopMenu";
 import { useAuth } from "@/context/AuthProvider";
+import AvaliarPassageiro from "@/components/AvaliarPassageiro";
+import { useAvaliacaoPendente } from "@/hooks/useAvaliacaoPendente";
+import { useDespachoMotorista } from "@/hooks/useDespachoMotorista";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -28,6 +31,21 @@ import {
 } from "react-native";
 import { Region } from "react-native-maps";
 
+const ROTULO_STATUS: Record<string, string> = {
+  aceita: "A caminho do passageiro",
+  motorista_chegou: "No local, aguardando",
+  em_andamento: "Viagem em andamento",
+};
+
+const PROXIMA_ACAO: Record<
+  string,
+  { acao: "cheguei" | "iniciar" | "finalizar"; rotulo: string }
+> = {
+  aceita: { acao: "cheguei", rotulo: "Cheguei" },
+  motorista_chegou: { acao: "iniciar", rotulo: "Iniciar viagem" },
+  em_andamento: { acao: "finalizar", rotulo: "Finalizar" },
+};
+
 export default function Home() {
   const { user, loading: authLoading, usuario } = useAuth();
   const router = useRouter();
@@ -37,7 +55,25 @@ export default function Home() {
   const [region, setRegion] = useState<Region | null>(null);
   const [destinationModalVisible, setDestinationModalVisible] = useState(false);
   const [solicitacoesCorrida, setSolicitacoesCorrida] = useState(false);
-  const [recebendoChamada, setRecebendoChamada] = useState(false);
+  const {
+    disponivel,
+    oferta,
+    corrida,
+    chegada,
+    erro: erroDespacho,
+    ocupado,
+    alternarDisponibilidade,
+    aceitar,
+    recusar,
+    avancar,
+  } = useDespachoMotorista();
+
+  const {
+    corrida: corridaParaAvaliar,
+    enviando: enviandoAvaliacao,
+    avaliar,
+    dispensar: dispensarAvaliacao,
+  } = useAvaliacaoPendente(corrida?.id ?? null);
 
   // ✨ NOVO ESTADO: Armazena a região inicial do usuário (sem o ajuste de offset)
   const userInitialRegion = useRef<Region | null>(null);
@@ -152,40 +188,73 @@ export default function Home() {
         isGanhoModalVisible={ganhoModalVisivel}
       />
 
-      {/* Simular chamada */}
       <TouchableOpacity
-        style={{
-          position: "absolute",
-          top: 150,
-          left: 10,
-          backgroundColor: "#000",
-          width: 60, // largura igual à altura para formar um círculo
-          height: 60,
-          borderRadius: 30, // metade da largura = círculo perfeito
-          alignItems: "center", // centraliza horizontalmente
-          justifyContent: "center", // centraliza verticalmente
-          shadowColor: "#000",
-          shadowOpacity: 0.3,
-          shadowRadius: 4,
-          shadowOffset: { width: 0, height: 2 },
-        }}
-        onPress={() => setRecebendoChamada(true)}
+        style={styles.botaoDisponibilidade}
+        disabled={ocupado || corrida !== null}
+        onPress={() => alternarDisponibilidade(!disponivel)}
       >
         <Ionicons
-          name="notifications-circle-outline"
-          size={38}
-          color="#fbc02d"
+          name={disponivel ? "radio-outline" : "power-outline"}
+          size={30}
+          color={disponivel ? "#22c55e" : "#fbc02d"}
         />
+        <Text style={styles.textoDisponibilidade}>
+          {corrida !== null ? "Em corrida" : disponivel ? "Online" : "Offline"}
+        </Text>
       </TouchableOpacity>
-      {/* Exibe o card se estiver recebendo chamada */}
-      {recebendoChamada && (
+
+      {erroDespacho.length > 0 && (
+        <View style={styles.faixaErro}>
+          <Text style={styles.textoErro}>{erroDespacho}</Text>
+        </View>
+      )}
+
+      {corrida !== null && (
+        <View style={styles.barraCorrida}>
+          <Text style={styles.codigoCorrida}>{corrida.codigo_corrida}</Text>
+          <View style={styles.statusCorrida}>
+            <Text style={styles.statusTexto}>
+              {ROTULO_STATUS[corrida.status_corrida] ?? corrida.status_corrida}
+            </Text>
+
+            {chegada && (
+              <Text style={styles.chegadaTexto}>
+                {chegada.alvo === "origem"
+                  ? `${chegada.minutos} min até o passageiro`
+                  : `${chegada.minutos} min até o destino`}
+                {` · ${chegada.distancia_km.toFixed(1).replace(".", ",")} km`}
+              </Text>
+            )}
+          </View>
+
+          {PROXIMA_ACAO[corrida.status_corrida] && (
+            <TouchableOpacity
+              style={styles.botaoAcao}
+              disabled={ocupado}
+              onPress={() => avancar(PROXIMA_ACAO[corrida.status_corrida].acao)}
+            >
+              <Text style={styles.textoBotaoAcao}>
+                {PROXIMA_ACAO[corrida.status_corrida].rotulo}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {corridaParaAvaliar !== null && corrida === null && (
+        <AvaliarPassageiro
+          corrida={corridaParaAvaliar}
+          enviando={enviandoAvaliacao}
+          onAvaliar={avaliar}
+          onDispensar={dispensarAvaliacao}
+        />
+      )}
+
+      {oferta !== null && corrida === null && (
         <RecebendoChamada
-          onAceitar={() => {
-            setRecebendoChamada(false);
-          }}
-          onRecusar={() => {
-            setRecebendoChamada(false);
-          }}
+          valor={oferta.valor_motorista}
+          onAceitar={aceitar}
+          onRecusar={recusar}
         />
       )}
 
@@ -207,7 +276,7 @@ export default function Home() {
       <SideMenu visible={menuVisible} onClose={closeMenu} drawerWidth={280} />
 
       {/* FolhaInferior */}
-      {!recebendoChamada && (
+      {oferta === null && (
         <>
           {menuVisible && (
             <Pressable
@@ -254,6 +323,83 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
+  botaoDisponibilidade: {
+    position: "absolute",
+    top: 150,
+    left: 10,
+    backgroundColor: "#000",
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  textoDisponibilidade: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  faixaErro: {
+    position: "absolute",
+    top: 110,
+    left: 10,
+    right: 10,
+    backgroundColor: "rgba(220, 38, 38, 0.92)",
+    borderRadius: 10,
+    padding: 10,
+  },
+  textoErro: {
+    color: "#fff",
+    fontSize: 13,
+    textAlign: "center",
+  },
+  barraCorrida: {
+    position: "absolute",
+    top: 60,
+    left: 10,
+    right: 10,
+    backgroundColor: "#111",
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  codigoCorrida: {
+    color: "#fbc02d",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  statusCorrida: {
+    flex: 1,
+    marginHorizontal: 10,
+  },
+  statusTexto: {
+    color: "#fff",
+    fontSize: 13,
+  },
+  chegadaTexto: {
+    color: "#fbc02d",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  botaoAcao: {
+    backgroundColor: "#fbc02d",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  textoBotaoAcao: {
+    color: "#000",
+    fontWeight: "700",
+    fontSize: 13,
+  },
   container: { flex: 1 },
   backdrop: {
     position: "absolute",

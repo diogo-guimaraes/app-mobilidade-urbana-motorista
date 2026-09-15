@@ -1,36 +1,42 @@
-// context/AuthProvider.tsx
+import { api, ehErroDeRede, setUnauthorizedHandler } from "@/Services/api";
+import { useRouter } from "expo-router";
+import * as SecureStore from "expo-secure-store";
 import React, {
   createContext,
   ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useState,
 } from "react";
+import { AppState } from "react-native";
 
 interface Usuario {
-  id: string;
+  id: number;
+  name: string;
   email: string;
-  nome: string;
-  sobrenome: string;
-  tipoUsuario: string;
+  telefone?: string | null;
+  cpf?: string | null;
+  foto?: string | null;
+  tipoUsuario?: string;
 }
 
 interface AuthContextType {
   user: string | null;
-  loading: boolean;
   usuario: Usuario | null;
-  login: (username: string) => void;
-  logout: () => void;
-  register: (usuario: any) => void; // Adicione esta linha
+  loading: boolean;
+  login: (email: string, senha: string) => Promise<void>;
+  logout: () => Promise<void>;
+  sessaoValida: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  loading: true,
   usuario: null,
-  login: () => {},
-  logout: () => {},
-  register: () => {}, // Adicione esta linha
+  loading: true,
+  login: async () => {},
+  logout: async () => {},
+  sessaoValida: async () => false,
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -38,57 +44,88 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Simula busca do usuário do storage
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        // Simulando busca de usuário no AsyncStorage
-        const storedUser = await new Promise<string | null>((resolve) =>
-          setTimeout(() => {
-            // Aqui você pode verificar se há um usuário salvo
-            // Por enquanto, sempre retorna null para forçar login
-            resolve(null);
-          }, 500)
-        );
-        setUser(storedUser);
-      } catch (error) {
-        console.error("Erro ao buscar usuário:", error);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const router = useRouter();
 
-    fetchUser();
+  const limparSessao = useCallback(async () => {
+    await SecureStore.deleteItemAsync("token");
+    setUser(null);
+    setUsuario(null);
   }, []);
 
-  const login = (username: string) => {
-    setLoading(true);
-    setTimeout(() => {
-      setUser(username);
-      setLoading(false);
-      // Aqui você salvaria o usuário no AsyncStorage
-    }, 1000);
-  };
+  const carregarUsuario = useCallback(async () => {
+    const token = await SecureStore.getItemAsync("token");
 
-  const logout = () => {
-    setUser(null);
-    // Aqui você limparia o AsyncStorage
-  };
+    if (!token) {
+      setUser(null);
+      setUsuario(null);
+      return;
+    }
 
-  const register = (novoUsuario: Usuario) => {
-    setLoading(true);
-    setTimeout(() => {
-      // Aqui você poderia salvar no AsyncStorage
-      setUsuario(novoUsuario);
-      setUser(novoUsuario.email);
-      setLoading(false);
-    }, 1000);
-  };
+    try {
+      const { data } = await api.get<Usuario>("/usuario-logado");
+
+      setUsuario(data);
+      setUser(data?.email ?? null);
+    } catch (erro) {
+      if (!ehErroDeRede(erro)) {
+        await limparSessao();
+      }
+    }
+  }, [limparSessao]);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      limparSessao();
+      router.replace("/login");
+    });
+  }, [limparSessao, router]);
+
+  useEffect(() => {
+    carregarUsuario().finally(() => setLoading(false));
+  }, [carregarUsuario]);
+
+  useEffect(() => {
+    const assinatura = AppState.addEventListener("change", (estado) => {
+      if (estado === "active") carregarUsuario();
+    });
+
+    return () => assinatura.remove();
+  }, [carregarUsuario]);
+
+  const login = useCallback(async (email: string, senha: string) => {
+    const { data } = await api.post<{ token: string; user: Usuario }>(
+      "/auth/login",
+      { email, password: senha },
+    );
+
+    await SecureStore.setItemAsync("token", data.token);
+
+    setUsuario(data.user);
+    setUser(data.user?.email ?? email);
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch {
+      // token já pode estar inválido; a limpeza local é o que importa
+    }
+
+    await limparSessao();
+  }, [limparSessao]);
+
+  const sessaoValida = useCallback(async () => {
+    try {
+      await api.get("/usuario-logado");
+      return true;
+    } catch (erro) {
+      return ehErroDeRede(erro);
+    }
+  }, []);
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, logout, register, usuario }}
+      value={{ user, usuario, loading, login, logout, sessaoValida }}
     >
       {children}
     </AuthContext.Provider>

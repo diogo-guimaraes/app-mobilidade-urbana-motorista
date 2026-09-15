@@ -12,7 +12,7 @@ export interface ModalAnimationConfig {
 
 export function useModalAnimation(
   visible: boolean,
-  config: ModalAnimationConfig = {}
+  config: ModalAnimationConfig = {},
 ) {
   const {
     duration = 400,
@@ -51,7 +51,7 @@ export function useModalAnimation(
         }),
       ]).start();
     }
-  }, [visible, overlayOpacity, duration, overlayDuration, slideAnim  ]);
+  }, [visible, overlayOpacity, duration, overlayDuration, slideAnim]);
 
   // 🔹 Corrigido: aguarda animação terminar antes de fechar
   const closeAnimation = (onClose: () => void) => {

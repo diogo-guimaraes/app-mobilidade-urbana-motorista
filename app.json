@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "p6driverfrontend",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
@@ -18,7 +17,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -47,7 +45,13 @@
           "locationAlwaysPermission": "Permitir $(PRODUCT_NAME) usar sua localização.",
           "locationWhenInUsePermission": "Permitir $(PRODUCT_NAME) usar sua localização."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-status-bar",
+      "expo-web-browser",
+      "expo-audio",
+      "expo-asset",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
   },
   dateText: { fontSize: 14, color: "#333", marginRight: 5, fontWeight: "500" },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: "center",
     alignItems: "center",
     zIndex: 10,

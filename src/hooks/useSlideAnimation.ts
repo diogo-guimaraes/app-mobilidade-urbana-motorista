@@ -12,7 +12,7 @@ export interface AnimationConfig {
 export function useSlideAnimation(
   visible: boolean,
   drawerWidth: number,
-  config: AnimationConfig = {}
+  config: AnimationConfig = {},
 ) {
   const {
     damping = 20,
