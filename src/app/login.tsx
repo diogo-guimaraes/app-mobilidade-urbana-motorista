@@ -17,10 +17,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../Services/api";
 import { useAuth } from "../context/AuthProvider";
 
 export default function Login() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const [phone, setPhone] = useState("");
@@ -124,7 +126,12 @@ export default function Login() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.header}>
+          <View
+            style={[
+              styles.header,
+              { paddingTop: Math.max(insets.top + 12, 56) },
+            ]}
+          >
             <AppLogo />
 
             <View style={styles.badgeContainer}>
@@ -219,7 +226,14 @@ export default function Login() {
           </View>
         </ScrollView>
 
-        <View style={[styles.footer, { paddingBottom: 60 + espacoDoTeclado }]}>
+        <View
+          style={[
+            styles.footer,
+            {
+              paddingBottom: Math.max(insets.bottom + 12, 60) + espacoDoTeclado,
+            },
+          ]}
+        >
           <TouchableOpacity
             onPress={() => verificarSeContaExiste()}
             style={[

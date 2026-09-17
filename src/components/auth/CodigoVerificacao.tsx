@@ -18,6 +18,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface props {
   visible: boolean;
@@ -32,6 +33,7 @@ export default function CodigoVerificacao({
   telefone,
   duration = 200,
 }: props) {
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [translateX] = useState(() => new Animated.Value(width));
   const espacoDoTeclado = useEspacoDoTeclado();
@@ -274,7 +276,12 @@ export default function CodigoVerificacao({
           ]}
         >
           {/* HEADER */}
-          <View style={styles.header}>
+          <View
+            style={[
+              styles.header,
+              { paddingTop: Math.max(insets.top + 12, 50) },
+            ]}
+          >
             <TouchableOpacity onPress={onClose} style={styles.backButton}>
               <Ionicons name="chevron-back" size={26} color="#000" />
             </TouchableOpacity>
@@ -373,7 +380,13 @@ export default function CodigoVerificacao({
           </ScrollView>
 
           <View
-            style={[styles.footer, { paddingBottom: 60 + espacoDoTeclado }]}
+            style={[
+              styles.footer,
+              {
+                paddingBottom:
+                  Math.max(insets.bottom + 12, 60) + espacoDoTeclado,
+              },
+            ]}
           >
             {/* botão */}
             <TouchableOpacity

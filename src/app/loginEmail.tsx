@@ -17,9 +17,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 export default function LoginEmail() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const { user, loading, login } = useAuth();
@@ -118,7 +122,7 @@ export default function LoginEmail() {
         }}
       />
 
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={[]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.keyboard}
@@ -129,7 +133,12 @@ export default function LoginEmail() {
             keyboardShouldPersistTaps="handled"
           >
             {/* HEADER */}
-            <View style={styles.header}>
+            <View
+              style={[
+                styles.header,
+                { paddingTop: Math.max(insets.top + 12, 36) },
+              ]}
+            >
               <AppLogo />
 
               <View style={styles.badgeContainer}>
@@ -237,7 +246,13 @@ export default function LoginEmail() {
           </ScrollView>
 
           <View
-            style={[styles.footer, { paddingBottom: 60 + espacoDoTeclado }]}
+            style={[
+              styles.footer,
+              {
+                paddingBottom:
+                  Math.max(insets.bottom + 12, 60) + espacoDoTeclado,
+              },
+            ]}
           >
             <TouchableOpacity
               style={styles.roundedButton}
