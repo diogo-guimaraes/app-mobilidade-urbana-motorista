@@ -13,7 +13,7 @@ interface DriverSearchProps {
 export default function FolhaInferiorMotorista({
   onSheetChange,
 }: DriverSearchProps) {
-  const { user, loading: authLoading, usuario } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   // snap points do bottomsheet
   const snapPoints = useMemo(() => ["64%", "80%"], []);
   const sheetRef = useRef<BottomSheet>(null);
@@ -21,7 +21,7 @@ export default function FolhaInferiorMotorista({
   // eventos
   const handleSheetChange = useCallback(
     (index: number) => {
-      console.log(usuario, "handleSheetChange", index);
+      console.log(user, "handleSheetChange", index);
       // ✨ CHAMANDO CALLBACK: Notifica o componente pai sobre o índice atual
       onSheetChange(index);
     },
@@ -38,7 +38,7 @@ export default function FolhaInferiorMotorista({
       >
         {/* Campo de pesquisa */}
         <BottomSheetView className="flex-1 items-center px-4">
-          <Text>escreva aqui, {usuario?.name}!</Text>
+          <Text>escreva aqui, {user?.name}!</Text>
           {/* crie aqui */}
         </BottomSheetView>
       </BottomSheet>

@@ -1,7 +1,6 @@
-import { api, ehErroDeRede, setUnauthorizedHandler } from "@/Services/api";
-import { useRouter } from "expo-router";
-import * as SecureStore from "expo-secure-store";
-import React, {
+// context/AuthProvider.tsx
+
+import {
   createContext,
   ReactNode,
   useCallback,
@@ -9,138 +8,312 @@ import React, {
   useEffect,
   useState,
 } from "react";
+
+import { router } from "expo-router";
+import * as SecureStore from "expo-secure-store";
 import { AppState } from "react-native";
 
+import { api, ehErroDeRede, setUnauthorizedHandler } from "../Services/api";
+
+// =========================
+// INTERFACES
+// =========================
+
 interface Usuario {
-  id: number;
-  name: string;
+  id: string;
   email: string;
-  telefone?: string | null;
-  cpf?: string | null;
-  foto?: string | null;
-  tipoUsuario?: string;
+  name: string;
+  telefone: string;
+  cpf: string;
+  data_nascimento: string;
+  foto: string;
+  foto_thumbnail: string;
+}
+
+interface AuthResponse {
+  user: Usuario;
+  token: string;
+}
+
+interface DadosCadastro {
+  email: string;
+  name: string;
+  cpf: string;
+  data_nascimento: string;
+  password: string;
+  telefone?: string;
+}
+
+// este app cadastra motorista; sem o perfil o backend cria só o usuário e
+// todo endpoint do motorista responde 403
+const PERFIL_DESTE_APP = "motorista";
+
+interface AtualizarFotoPayload {
+  foto: string;
+  foto_thumbnail: string;
 }
 
 interface AuthContextType {
-  user: string | null;
-  usuario: Usuario | null;
+  user: Usuario | null;
+
   loading: boolean;
-  login: (email: string, senha: string) => Promise<void>;
-  loginComToken: (usuario: Usuario, token: string) => Promise<void>;
+
+  login: (email: string, password: string) => Promise<void>;
+
+  loginComToken: (user: Usuario, token: string) => Promise<void>;
+
   logout: () => Promise<void>;
+
+  register: (dados: DadosCadastro) => Promise<void>;
+
+  atualizarFotoUsuario: (dados: AtualizarFotoPayload) => Promise<void>;
+
   sessaoValida: () => Promise<boolean>;
 }
 
+// =========================
+// CONTEXT
+// =========================
+
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  usuario: null,
+
   loading: true,
-  login: async () => {},
-  loginComToken: async () => {},
+
+  login: async (email: string, password: string) => {},
+
+  loginComToken: async (user: Usuario, token: string) => {},
+
   logout: async () => {},
-  sessaoValida: async () => false,
+
+  register: async (dados: DadosCadastro) => {},
+
+  atualizarFotoUsuario: async (dados: AtualizarFotoPayload) => {},
+
+  sessaoValida: async () => true,
 });
 
+// =========================
+// PROVIDER
+// =========================
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<string | null>(null);
-  const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [user, setUser] = useState<Usuario | null>(null);
+
   const [loading, setLoading] = useState(true);
 
-  const router = useRouter();
+  // =========================
+  // RESTAURA SESSÃO
+  // =========================
 
-  const limparSessao = useCallback(async () => {
-    await SecureStore.deleteItemAsync("token");
-    setUser(null);
-    setUsuario(null);
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const storedUser = await SecureStore.getItemAsync("user");
+        const storedToken = await SecureStore.getItemAsync("token");
+
+        // só restaura se tiver os dois; usuário sem token não consegue
+        // autenticar nenhuma requisição
+        if (storedUser && storedToken) {
+          const parsedUser = JSON.parse(storedUser);
+
+          setUser(parsedUser);
+        }
+      } catch (error) {
+        console.error("Erro ao restaurar sessão:", error);
+
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    restoreSession();
   }, []);
 
-  const carregarUsuario = useCallback(async () => {
-    const token = await SecureStore.getItemAsync("token");
+  // =========================
+  // LOGIN
+  // =========================
 
-    if (!token) {
-      setUser(null);
-      setUsuario(null);
-      return;
-    }
-
+  const login = async (email: string, password: string) => {
     try {
-      const { data } = await api.get<Usuario>("/usuario-logado");
+      setLoading(true);
 
-      setUsuario(data);
-      setUser(data?.email ?? null);
-    } catch (erro) {
-      if (!ehErroDeRede(erro)) {
-        await limparSessao();
+      const response = await api.post<AuthResponse>("/auth/login", {
+        email,
+        password,
+      });
+
+      const { user, token } = response.data;
+
+      setUser(user);
+
+      await SecureStore.setItemAsync("user", JSON.stringify(user));
+
+      await SecureStore.setItemAsync("token", token);
+    } catch (error: any) {
+      if (__DEV__) {
+        console.error(
+          "Erro ao fazer login:",
+          error?.response?.status,
+          error?.response?.data ?? error?.message,
+        );
       }
+
+      throw error;
+    } finally {
+      setLoading(false);
     }
-  }, [limparSessao]);
+  };
+
+  const loginComToken = async (userData: Usuario, token: string) => {
+    try {
+      setLoading(true);
+      setUser(userData);
+
+      await SecureStore.setItemAsync("user", JSON.stringify(userData));
+
+      await SecureStore.setItemAsync("token", token);
+    } catch (error) {
+      console.error("Erro ao autenticar com token:", error);
+
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =========================
+  // LOGOUT
+  // =========================
+
+  // Limpa a sessão local sem chamar o backend (usado quando o token já é
+  // sabidamente inválido, ex: resposta 401 de qualquer requisição).
+  const limparSessaoLocal = async () => {
+    setUser(null);
+
+    await SecureStore.deleteItemAsync("user");
+
+    await SecureStore.deleteItemAsync("token");
+  };
+
+  const logout = async () => {
+    try {
+      // invalida o token no backend antes de limpar localmente
+      await api.post("/auth/logout");
+    } catch (error) {
+      console.error("Erro ao invalidar token no backend:", error);
+    } finally {
+      await limparSessaoLocal();
+    }
+  };
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
-      limparSessao();
-      router.replace("/login");
+      // token já é inválido (401): só limpa localmente, não chama /auth/logout
+      limparSessaoLocal();
+
+      router.replace({
+        pathname: "/login",
+        params: { motivo: "sessao-expirada" },
+      });
     });
-  }, [limparSessao, router]);
-
-  useEffect(() => {
-    carregarUsuario().finally(() => setLoading(false));
-  }, [carregarUsuario]);
-
-  useEffect(() => {
-    const assinatura = AppState.addEventListener("change", (estado) => {
-      if (estado === "active") carregarUsuario();
-    });
-
-    return () => assinatura.remove();
-  }, [carregarUsuario]);
-
-  const login = useCallback(async (email: string, senha: string) => {
-    const { data } = await api.post<{ token: string; user: Usuario }>(
-      "/auth/login",
-      { email, password: senha },
-    );
-
-    await SecureStore.setItemAsync("token", data.token);
-
-    setUsuario(data.user);
-    setUser(data.user?.email ?? email);
   }, []);
-
-  const loginComToken = useCallback(async (dados: Usuario, token: string) => {
-    await SecureStore.setItemAsync("token", token);
-
-    setUsuario(dados);
-    setUser(dados?.email ?? dados?.telefone ?? String(dados.id));
-  }, []);
-
-  const logout = useCallback(async () => {
-    try {
-      await api.post("/auth/logout");
-    } catch {
-      // token já pode estar inválido; a limpeza local é o que importa
-    }
-
-    await limparSessao();
-  }, [limparSessao]);
 
   const sessaoValida = useCallback(async () => {
     try {
       await api.get("/usuario-logado");
+
       return true;
-    } catch (erro) {
-      return ehErroDeRede(erro);
+    } catch (error) {
+      return ehErroDeRede(error);
     }
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    sessaoValida();
+
+    const assinatura = AppState.addEventListener("change", (estado) => {
+      if (estado === "active") {
+        sessaoValida();
+      }
+    });
+
+    return () => assinatura.remove();
+  }, [user, sessaoValida]);
+
+  // =========================
+  // REGISTER
+  // =========================
+
+  const register = async (dadosCadastro: DadosCadastro) => {
+    try {
+      setLoading(true);
+
+      const response = await api.post<AuthResponse>("/auth/register", {
+        ...dadosCadastro,
+        perfil: PERFIL_DESTE_APP,
+      });
+
+      const { user, token } = response.data;
+
+      setUser(user);
+
+      await SecureStore.setItemAsync("user", JSON.stringify(user));
+
+      await SecureStore.setItemAsync("token", token);
+    } catch (error: any) {
+      if (__DEV__) {
+        console.error(
+          "Erro ao registrar:",
+          error?.response?.status,
+          error?.response?.data ?? error?.message,
+        );
+      }
+
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =========================
+  // ATUALIZAR FOTO USUÁRIO
+  // =========================
+
+  const atualizarFotoUsuario = async ({
+    foto,
+    foto_thumbnail,
+  }: AtualizarFotoPayload) => {
+    if (!user) return;
+
+    const usuarioAtualizado = {
+      ...user,
+      foto,
+      foto_thumbnail,
+    };
+
+    setUser(usuarioAtualizado);
+
+    await SecureStore.setItemAsync("user", JSON.stringify(usuarioAtualizado));
+  };
+
+  // =========================
+  // PROVIDER
+  // =========================
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        usuario,
         loading,
         login,
         loginComToken,
         logout,
+        register,
+        atualizarFotoUsuario,
         sessaoValida,
       }}
     >
@@ -148,5 +321,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     </AuthContext.Provider>
   );
 };
+
+// =========================
+// HOOK
+// =========================
 
 export const useAuth = () => useContext(AuthContext);

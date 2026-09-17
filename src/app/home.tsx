@@ -37,7 +37,7 @@ import {
 import { Region } from "react-native-maps";
 
 export default function Home() {
-  const { user, loading: authLoading, usuario } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const [menuVisible, setMenuVisible] = useState(false);
@@ -52,6 +52,7 @@ export default function Home() {
     chegada,
     passageiro,
     posicao,
+    precisaLiberacao,
     erro: erroDespacho,
     ocupado,
     alternarDisponibilidade,
@@ -110,6 +111,13 @@ export default function Home() {
   };
 
   // 🔹 Redirecionar para login se não estiver autenticado
+  // cadastro ainda em análise não opera: volta para a esteira de liberação
+  useEffect(() => {
+    if (precisaLiberacao) {
+      router.replace("/liberacao");
+    }
+  }, [precisaLiberacao, router]);
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace("/login");
@@ -138,7 +146,7 @@ export default function Home() {
 
   // ✨ NOVO: Função para ajustar o mapa quando o BottomSheet muda de estado
   const handleSheetStateChange = useCallback((index: number) => {
-    console.log(usuario, "BottomSheet Index1:", index);
+    console.log(user, "BottomSheet Index1:", index);
     // 🔹 Atualiza o estado que será passado para o Map
     setBottomSheetIndex(index);
     if (!userInitialRegion.current) {
@@ -148,7 +156,7 @@ export default function Home() {
   }, []);
 
   const onChangeBottomSheetMotorista = useCallback((index: number) => {
-    console.log(usuario, "onChangeBottomSheetMotorista Index:", index);
+    console.log(user, "onChangeBottomSheetMotorista Index:", index);
     console.log(user, "user home:");
 
     setBottomSheetIndex(index);
@@ -265,16 +273,9 @@ export default function Home() {
             />
           )}
 
-          {usuario?.tipoUsuario === "PASSAGEIRO" ? (
-            <FolhaInferiorPassageiro
-              onPressInput={() => setDestinationModalVisible(true)}
-              onSheetChange={handleSheetStateChange}
-            />
-          ) : (
-            <FolhaInferiorMotorista
-              onSheetChange={onChangeBottomSheetMotorista}
-            />
-          )}
+          <FolhaInferiorMotorista
+            onSheetChange={onChangeBottomSheetMotorista}
+          />
 
           <SolicitarCorrida
             visible={destinationModalVisible}
@@ -286,20 +287,13 @@ export default function Home() {
             onClose={() => setSolicitacoesCorrida(false)}
           />
 
-          {usuario?.tipoUsuario === "PASSAGEIRO" ? (
-            <MenuInferiorPassageiro
-              selectedTab={selectedTab}
-              onTabPress={setSelectedTab}
-            />
-          ) : (
-            <MenuInferiorMotorista
-              setSolicitacoesCorrida={() => setSolicitacoesCorrida(true)}
-              disponivel={disponivel}
-              emCorrida={corrida !== null}
-              ocupado={ocupado}
-              onAlternarDisponibilidade={alternarDisponibilidade}
-            />
-          )}
+          <MenuInferiorMotorista
+            setSolicitacoesCorrida={() => setSolicitacoesCorrida(true)}
+            disponivel={disponivel}
+            emCorrida={corrida !== null}
+            ocupado={ocupado}
+            onAlternarDisponibilidade={alternarDisponibilidade}
+          />
         </>
       )}
     </View>

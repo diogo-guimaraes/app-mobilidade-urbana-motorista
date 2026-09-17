@@ -260,7 +260,7 @@ export default function SideMenu({
             </TouchableOpacity>
 
             <View style={styles.nameRow}>
-              <Text style={styles.userName}>{user || "Diogo"}</Text>
+              <Text style={styles.userName}>{user?.name || "Diogo"}</Text>
               <Text style={styles.ratingText}> · 4,82 ★</Text>
             </View>
 
