@@ -61,6 +61,9 @@ export function useDespachoMotorista() {
   const [passageiro, setPassageiro] = useState<PassageiroDaCorrida | null>(
     null,
   );
+  // o servidor recusa com 403 + situacao quando o cadastro ainda não foi
+  // aprovado; a home usa isso para mandar o motorista para a liberação
+  const [precisaLiberacao, setPrecisaLiberacao] = useState(false);
   const [posicao, setPosicao] = useState<{
     latitude: number;
     longitude: number;
@@ -109,8 +112,17 @@ export function useDespachoMotorista() {
 
       setDisponivel(Boolean(data?.disponivel));
       setCorrida(data?.corrida ?? null);
-    } catch {
-      // silencioso: é só sincronização de estado
+      setPrecisaLiberacao(false);
+    } catch (falha) {
+      const resposta = (
+        falha as {
+          response?: { status?: number; data?: { situacao?: string } };
+        }
+      )?.response;
+
+      if (resposta?.status === 403 && resposta.data?.situacao !== undefined) {
+        setPrecisaLiberacao(true);
+      }
     }
   }, []);
 
@@ -320,6 +332,7 @@ export function useDespachoMotorista() {
     chegada,
     passageiro,
     posicao,
+    precisaLiberacao,
     erro,
     ocupado,
     alternarDisponibilidade,
