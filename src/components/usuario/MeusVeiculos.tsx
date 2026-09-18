@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -8,7 +9,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -47,8 +47,7 @@ export default function MeusVeiculos({
       status: "Aprovado",
       placa: "NCQ-7483",
       modelo: "Chevrolet ONIX LT (FLEX)",
-      imagem:
-        "https://cdn-icons-png.flaticon.com/512/744/744465.png",
+      imagem: "https://cdn-icons-png.flaticon.com/512/744/744465.png",
       ativo: true,
     },
     {
@@ -58,8 +57,7 @@ export default function MeusVeiculos({
       placa: "ABC-1234",
       modelo: "Hyundai HB20 (FLEX)",
       ativo: false,
-      imagem:
-        "https://cdn-icons-png.flaticon.com/512/744/744465.png",
+      imagem: "https://cdn-icons-png.flaticon.com/512/744/744465.png",
     },
     {
       id: "3",
@@ -68,8 +66,7 @@ export default function MeusVeiculos({
       placa: "XYZ-9090",
       modelo: "Honda CG 160",
       ativo: false,
-      imagem:
-        "https://cdn-icons-png.flaticon.com/512/1986/1986937.png",
+      imagem: "https://cdn-icons-png.flaticon.com/512/1986/1986937.png",
     },
   ];
 
@@ -83,7 +80,7 @@ export default function MeusVeiculos({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -122,7 +119,6 @@ export default function MeusVeiculos({
   if (!isMounted) return null;
 
   const renderVeiculo = (item: any) => (
-
     <View key={item.id} style={styles.card}>
       {/* TOP */}
       <TouchableOpacity onPress={() => mostrarDetalhes(item)}>
@@ -149,7 +145,6 @@ export default function MeusVeiculos({
           <Image source={{ uri: item.imagem }} style={styles.image} />
         </View>
       </TouchableOpacity>
-
     </View>
   );
 
@@ -182,16 +177,16 @@ export default function MeusVeiculos({
           </View>
 
           {/* BODY */}
-          <ScrollView
-            style={styles.body}
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
             {veiculos.map(renderVeiculo)}
           </ScrollView>
 
           {/* BOTÃO FIXO */}
           <View style={styles.footer}>
-            <TouchableOpacity onPress={() => setShowEscolherVeiculo(true)} style={styles.button}>
+            <TouchableOpacity
+              onPress={() => setShowEscolherVeiculo(true)}
+              style={styles.button}
+            >
               <Text style={styles.buttonText}>Adicionar</Text>
             </TouchableOpacity>
           </View>

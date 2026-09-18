@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -8,7 +9,6 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -90,7 +90,7 @@ export default function SolicitacoesCorrida({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -172,9 +172,7 @@ export default function SolicitacoesCorrida({
                 <View style={styles.cardHeader}>
                   <View style={styles.tipoContainer}>
                     <Text style={styles.tipoText}>{item.tipo}</Text>
-                    {item.novo && (
-                      <Text style={styles.novoBadge}>Novo</Text>
-                    )}
+                    {item.novo && <Text style={styles.novoBadge}>Novo</Text>}
                   </View>
                   <Ionicons
                     name="document-text-outline"

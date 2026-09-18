@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -8,7 +9,6 @@ import {
   ListRenderItem,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -26,7 +26,8 @@ interface AddressItem {
 }
 
 // 👉 Dados dos destinos direcionados
-const data: AddressItem[] = [ // 👈 Tipando a lista de dados 
+const data: AddressItem[] = [
+  // 👈 Tipando a lista de dados
   {
     id: "1",
     address: "Av. Paulista, 1000",
@@ -126,7 +127,6 @@ export default function DefinirDestino({
     console.log("entradaInput");
   };
 
-
   useEffect(() => {
     const onBackPress = () => {
       if (visible) {
@@ -137,7 +137,7 @@ export default function DefinirDestino({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -184,11 +184,7 @@ export default function DefinirDestino({
   // 👉 Componente de renderização para cada item da lista de endereços
   // 👈 Tipagem corrigida com ListRenderItem<AddressItem>
   const renderItem: ListRenderItem<AddressItem> = ({ item, index }) => (
-    <TouchableOpacity
-      style={[
-        styles.addressItem,
-      ]}
-    >
+    <TouchableOpacity style={[styles.addressItem]}>
       {/* Ícone dinâmico */}
       <Ionicons
         name={item.icon as any}
@@ -201,7 +197,7 @@ export default function DefinirDestino({
         style={[
           styles.addressContent,
           // Aplica a borda condicionalmente
-          index !== data.length - 1 && styles.addressContentSeparator
+          index !== data.length - 1 && styles.addressContentSeparator,
         ]}
       >
         <Text style={styles.addressLine1}>{item.address}</Text>
@@ -260,7 +256,7 @@ export default function DefinirDestino({
           </View>
 
           {/* Ícone de seta à direita */}
-          <TouchableOpacity >
+          <TouchableOpacity>
             <Ionicons name="close-outline" size={20} color="#aaa" />
           </TouchableOpacity>
         </View>
@@ -282,7 +278,7 @@ export default function DefinirDestino({
           </View>
 
           {/* Ícone de seta à direita */}
-          <TouchableOpacity >
+          <TouchableOpacity>
             <Ionicons name="create-outline" size={20} color="#aaa" />
           </TouchableOpacity>
         </View>

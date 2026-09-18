@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   ActivityIndicator,
   Animated,
@@ -8,7 +9,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -84,7 +84,7 @@ export default function SeusGanhos({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible]);
@@ -314,7 +314,7 @@ export default function SeusGanhos({
                               />
                               <Text style={styles.barDayText}>{day}</Text>
                             </View>
-                          )
+                          ),
                         )}
                   </View>
                 )}

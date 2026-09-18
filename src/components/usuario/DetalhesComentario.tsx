@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -8,7 +9,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -50,7 +50,7 @@ export default function NotasAgradecimento({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible]);
@@ -128,7 +128,6 @@ export default function NotasAgradecimento({
         {/* BODY */}
         <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
           <View style={styles.card}>
-            
             {/* TOP ROW: Quote and Avatar */}
             <View style={styles.cardTopRow}>
               <Text style={styles.quote}>“</Text>
@@ -137,18 +136,17 @@ export default function NotasAgradecimento({
 
             {/* CONTENT */}
             <Text style={styles.text}>{data.comentario}</Text>
-            
+
             <Text style={styles.tags}>
-                {'"Pontual" "Educado" "Bom condutor" "Sabe o caminho"'}
+              {'"Pontual" "Educado" "Bom condutor" "Sabe o caminho"'}
             </Text>
 
             <View style={styles.footer}>
-                <Text style={styles.author}>
+              <Text style={styles.author}>
                 {data.autor} • {data.tempo}
-                </Text>
-                {renderStars()}
+              </Text>
+              {renderStars()}
             </View>
-
           </View>
         </ScrollView>
       </Animated.View>
@@ -166,20 +164,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   header: {
-      backgroundColor: "#fff",
-  paddingTop: 45,
-  paddingBottom: 10,
-  paddingHorizontal: 16,
-  // Shadow iOS
-  shadowColor: "#000",
-  shadowOffset: {
-    width: 0,
-    height: 2,
-  },
-  shadowOpacity: 0.08,
-  shadowRadius: 4,
-  // Shadow Android
-  elevation: 3,
+    backgroundColor: "#fff",
+    paddingTop: 45,
+    paddingBottom: 10,
+    paddingHorizontal: 16,
+    // Shadow iOS
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    // Shadow Android
+    elevation: 3,
   },
   headerContent: {
     flexDirection: "row",
@@ -210,13 +208,13 @@ const styles = StyleSheet.create({
     color: "#E8E8E8",
     lineHeight: 80,
     marginTop: -10, // Ajuste para alinhar o topo da aspa
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   avatar: {
     width: 55,
     height: 55,
     borderRadius: 30,
-    backgroundColor: '#eee'
+    backgroundColor: "#eee",
   },
   text: {
     fontSize: 18,

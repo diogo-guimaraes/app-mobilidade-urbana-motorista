@@ -26,6 +26,7 @@ interface AuthContextType {
   usuario: Usuario | null;
   loading: boolean;
   login: (email: string, senha: string) => Promise<void>;
+  loginComToken: (usuario: Usuario, token: string) => Promise<void>;
   logout: () => Promise<void>;
   sessaoValida: () => Promise<boolean>;
 }
@@ -35,6 +36,7 @@ const AuthContext = createContext<AuthContextType>({
   usuario: null,
   loading: true,
   login: async () => {},
+  loginComToken: async () => {},
   logout: async () => {},
   sessaoValida: async () => false,
 });
@@ -104,6 +106,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(data.user?.email ?? email);
   }, []);
 
+  const loginComToken = useCallback(async (dados: Usuario, token: string) => {
+    await SecureStore.setItemAsync("token", token);
+
+    setUsuario(dados);
+    setUser(dados?.email ?? dados?.telefone ?? String(dados.id));
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await api.post("/auth/logout");
@@ -125,7 +134,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, usuario, loading, login, logout, sessaoValida }}
+      value={{
+        user,
+        usuario,
+        loading,
+        login,
+        loginComToken,
+        logout,
+        sessaoValida,
+      }}
     >
       {children}
     </AuthContext.Provider>

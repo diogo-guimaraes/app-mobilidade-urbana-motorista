@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text, TextInput } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -7,8 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -39,7 +38,7 @@ export default function AdicionarMetodoResgateConta({
   const [conta, setConta] = useState("1646");
   const [contaDigito, setContaDigito] = useState("0");
   const [tipoConta, setTipoConta] = useState<"corrente" | "poupanca">(
-    "poupanca"
+    "poupanca",
   );
   const [smsCode, setSmsCode] = useState("");
 
@@ -64,7 +63,7 @@ export default function AdicionarMetodoResgateConta({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);

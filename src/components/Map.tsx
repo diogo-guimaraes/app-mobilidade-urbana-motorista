@@ -2,8 +2,19 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import MapView, { Region, UserLocationChangeEvent } from "react-native-maps";
+import { Text } from "@/components/common/Texto";
+import { Alert, StyleSheet, TouchableOpacity, View } from "react-native";
+import MapView, {
+  Marker,
+  Polyline,
+  Region,
+  UserLocationChangeEvent,
+} from "react-native-maps";
+
+export interface Coordenada {
+  latitude: number;
+  longitude: number;
+}
 
 interface MapProps {
   region: Region | null;
@@ -11,6 +22,11 @@ interface MapProps {
   onUserLocationFound?: (region: Region) => void;
   bottomSheetIndex?: number; // 👈 nova prop
   isGanhoModalVisible?: boolean;
+  rota?: Coordenada[];
+  alvo?: Coordenada | null;
+  alvoEhDestino?: boolean;
+  // altura ocupada pela folha da corrida, pra rota não ficar embaixo dela
+  alturaFolha?: number;
 }
 
 // Região inicial vazia - será substituída pela localização do usuário
@@ -26,7 +42,11 @@ export default function Map({
   onRegionChange,
   onUserLocationFound,
   bottomSheetIndex, // 👈 recebendo o valor
-  isGanhoModalVisible
+  isGanhoModalVisible,
+  rota = [],
+  alvo = null,
+  alvoEhDestino = false,
+  alturaFolha = 0,
 }: MapProps) {
   const mapRef = useRef<MapView>(null);
   const [userLocation, setUserLocation] = useState<Region | null>(null);
@@ -37,6 +57,28 @@ export default function Map({
   // 🔹 guarda a região original do usuário para aplicar offsets conforme o BottomSheet
   const userInitialRegion = useRef<Region | null>(null);
   const [mapAdjusted, setMapAdjusted] = useState(false);
+
+  // com rota na tela, o mapa deixa de seguir a região manual e passa a
+  // mostrar o trajeto inteiro
+  const chaveRota =
+    rota.length > 0
+      ? `${rota.length}:${rota[0].latitude},${rota[0].longitude}:${rota[rota.length - 1].latitude},${rota[rota.length - 1].longitude}`
+      : "";
+
+  useEffect(() => {
+    if (chaveRota === "" || mapRef.current === null) return;
+
+    mapRef.current.fitToCoordinates(rota, {
+      edgePadding: {
+        top: 140,
+        right: 60,
+        bottom: Math.max(alturaFolha, 120) + 40,
+        left: 60,
+      },
+      animated: true,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveRota, alturaFolha]);
 
   // Solicitar permissão de localização
   useEffect(() => {
@@ -50,7 +92,7 @@ export default function Map({
         if (status === "granted") {
           setLocationPermission(true);
           console.log("Permissão concedida, obtendo localização...");
-          
+
           // Obter localização atual
           let location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Balanced,
@@ -82,7 +124,7 @@ export default function Map({
             onUserLocationFound(userInitialRegion.current);
           }
 
-           // Centralizar no usuário
+          // Centralizar no usuário
           if (mapRef.current) {
             mapRef.current.animateToRegion(userRegion, 1000);
           }
@@ -92,7 +134,7 @@ export default function Map({
           Alert.alert(
             "Localização Necessária",
             "Este app precisa da sua localização para funcionar corretamente. Por favor, permita o acesso à localização nas configurações do seu dispositivo.",
-            [{ text: "OK" }]
+            [{ text: "OK" }],
           );
         }
       } catch (error) {
@@ -101,7 +143,7 @@ export default function Map({
         Alert.alert(
           "Erro de Localização",
           "Não foi possível obter sua localização. Verifique se o GPS está ativado.",
-          [{ text: "OK" }]
+          [{ text: "OK" }],
         );
       } finally {
         setIsLoading(false);
@@ -137,7 +179,7 @@ export default function Map({
     } else if (userLocation && mapRef.current) {
       mapRef.current.animateToRegion(userLocation, 1000);
     } else {
-       // Tentar obter localização novamente
+      // Tentar obter localização novamente
       try {
         setIsLoading(true);
         let location = await Location.getCurrentPositionAsync({
@@ -214,7 +256,7 @@ export default function Map({
     );
   }
 
-   // Se não tem permissão, mostrar erro
+  // Se não tem permissão, mostrar erro
   if (!locationPermission) {
     return (
       <View style={[StyleSheet.absoluteFill, styles.errorContainer]}>
@@ -264,17 +306,35 @@ export default function Map({
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFill}
-        region={region || userLocation || emptyRegion}
+        region={
+          rota.length > 0 ? undefined : region || userLocation || emptyRegion
+        }
         onRegionChangeComplete={onRegionChange}
         showsUserLocation={true}
         showsMyLocationButton={false}
         onUserLocationChange={handleUserLocationChange}
         followsUserLocation={false}
         mapType="standard"
-      />
+      >
+        {rota.length > 1 && (
+          <Polyline
+            coordinates={rota}
+            strokeWidth={5}
+            strokeColor={alvoEhDestino ? "#2F6BFF" : "#17A673"}
+          />
+        )}
+
+        {alvo && (
+          <Marker
+            coordinate={alvo}
+            pinColor={alvoEhDestino ? "#D32F2F" : "#17A673"}
+            title={alvoEhDestino ? "Destino" : "Embarque"}
+          />
+        )}
+      </MapView>
 
       {/* Botão para centralizar no usuário */}
-       {!isGanhoModalVisible && (
+      {!isGanhoModalVisible && (
         <TouchableOpacity
           className="absolute top-32 bottom-32 right-2 rounded-full bg-white w-12 h-12 items-center justify-center z-20"
           onPress={centerOnUser}
@@ -286,7 +346,7 @@ export default function Map({
             color={isLoading ? "#ccc" : "#007AFF"}
           />
         </TouchableOpacity>
-       )}
+      )}
     </View>
   );
 }

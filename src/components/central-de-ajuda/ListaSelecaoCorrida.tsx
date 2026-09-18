@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -7,7 +8,6 @@ import {
   FlatList,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";

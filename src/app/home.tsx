@@ -3,6 +3,11 @@ import FolhaInferiorMotorista from "@/components/FolhaInferiorMotorista";
 import FolhaInferiorPassageiro from "@/components/FolhaInferiorPassageiro";
 import GanhoDiario from "@/components/GanhoDiario";
 import Map from "@/components/Map";
+import CorridaEmAndamento from "@/components/CorridaEmAndamento";
+import { useRotaDaCorrida } from "@/hooks/useRotaDaCorrida";
+
+// altura aproximada da folha de corrida, pra rota não ser enquadrada atrás dela
+const ALTURA_FOLHA_CORRIDA = 330;
 import MenuInferiorMotorista from "@/components/MenuInferiorMotorista";
 import MenuInferiorPassageiro from "@/components/MenuInferiorPassageiro";
 import RecebendoChamada from "@/components/RecebendoChamada";
@@ -18,33 +23,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   ActivityIndicator,
   Animated,
   Dimensions,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
   useColorScheme,
 } from "react-native";
 import { Region } from "react-native-maps";
-
-const ROTULO_STATUS: Record<string, string> = {
-  aceita: "A caminho do passageiro",
-  motorista_chegou: "No local, aguardando",
-  em_andamento: "Viagem em andamento",
-};
-
-const PROXIMA_ACAO: Record<
-  string,
-  { acao: "cheguei" | "iniciar" | "finalizar"; rotulo: string }
-> = {
-  aceita: { acao: "cheguei", rotulo: "Cheguei" },
-  motorista_chegou: { acao: "iniciar", rotulo: "Iniciar viagem" },
-  em_andamento: { acao: "finalizar", rotulo: "Finalizar" },
-};
 
 export default function Home() {
   const { user, loading: authLoading, usuario } = useAuth();
@@ -60,6 +50,8 @@ export default function Home() {
     oferta,
     corrida,
     chegada,
+    passageiro,
+    posicao,
     erro: erroDespacho,
     ocupado,
     alternarDisponibilidade,
@@ -67,6 +59,11 @@ export default function Home() {
     recusar,
     avancar,
   } = useDespachoMotorista();
+
+  const { rota: rotaDaCorrida, alvo: alvoDaCorrida } = useRotaDaCorrida(
+    corrida,
+    posicao,
+  );
 
   const {
     corrida: corridaParaAvaliar,
@@ -186,22 +183,11 @@ export default function Home() {
         onUserLocationFound={handleUserLocationFound}
         bottomSheetIndex={bottomSheetIndex}
         isGanhoModalVisible={ganhoModalVisivel}
+        rota={rotaDaCorrida}
+        alvo={alvoDaCorrida}
+        alvoEhDestino={corrida?.status_corrida === "em_andamento"}
+        alturaFolha={corrida === null ? 0 : ALTURA_FOLHA_CORRIDA}
       />
-
-      <TouchableOpacity
-        style={styles.botaoDisponibilidade}
-        disabled={ocupado || corrida !== null}
-        onPress={() => alternarDisponibilidade(!disponivel)}
-      >
-        <Ionicons
-          name={disponivel ? "radio-outline" : "power-outline"}
-          size={30}
-          color={disponivel ? "#22c55e" : "#fbc02d"}
-        />
-        <Text style={styles.textoDisponibilidade}>
-          {corrida !== null ? "Em corrida" : disponivel ? "Online" : "Offline"}
-        </Text>
-      </TouchableOpacity>
 
       {erroDespacho.length > 0 && (
         <View style={styles.faixaErro}>
@@ -210,35 +196,22 @@ export default function Home() {
       )}
 
       {corrida !== null && (
-        <View style={styles.barraCorrida}>
-          <Text style={styles.codigoCorrida}>{corrida.codigo_corrida}</Text>
-          <View style={styles.statusCorrida}>
-            <Text style={styles.statusTexto}>
-              {ROTULO_STATUS[corrida.status_corrida] ?? corrida.status_corrida}
-            </Text>
-
-            {chegada && (
-              <Text style={styles.chegadaTexto}>
-                {chegada.alvo === "origem"
-                  ? `${chegada.minutos} min até o passageiro`
-                  : `${chegada.minutos} min até o destino`}
-                {` · ${chegada.distancia_km.toFixed(1).replace(".", ",")} km`}
-              </Text>
-            )}
-          </View>
-
-          {PROXIMA_ACAO[corrida.status_corrida] && (
-            <TouchableOpacity
-              style={styles.botaoAcao}
-              disabled={ocupado}
-              onPress={() => avancar(PROXIMA_ACAO[corrida.status_corrida].acao)}
-            >
-              <Text style={styles.textoBotaoAcao}>
-                {PROXIMA_ACAO[corrida.status_corrida].rotulo}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <CorridaEmAndamento
+          status={corrida.status_corrida}
+          codigoCorrida={corrida.codigo_corrida}
+          origem={
+            corrida.corrida_destinos?.find((d) => d.tipo === "origem")?.endereco
+          }
+          destino={
+            corrida.corrida_destinos?.find((d) => d.tipo === "destino")
+              ?.endereco
+          }
+          passageiro={passageiro}
+          minutos={chegada?.minutos ?? null}
+          distanciaKm={chegada?.distancia_km ?? null}
+          ocupado={ocupado}
+          onAvancar={avancar}
+        />
       )}
 
       {corridaParaAvaliar !== null && corrida === null && (
@@ -253,6 +226,13 @@ export default function Home() {
       {oferta !== null && corrida === null && (
         <RecebendoChamada
           valor={oferta.valor_motorista}
+          distanciaAteOrigem={oferta.distancia_ate_origem_km}
+          distanciaDaCorrida={oferta.distancia_corrida_km}
+          origem={oferta.origem}
+          destino={oferta.destino}
+          paradas={oferta.paradas}
+          notaPassageiro={oferta.passageiro_nota}
+          corridasPassageiro={oferta.passageiro_corridas}
           onAceitar={aceitar}
           onRecusar={recusar}
         />
@@ -276,7 +256,7 @@ export default function Home() {
       <SideMenu visible={menuVisible} onClose={closeMenu} drawerWidth={280} />
 
       {/* FolhaInferior */}
-      {oferta === null && (
+      {oferta === null && corrida === null && (
         <>
           {menuVisible && (
             <Pressable
@@ -314,6 +294,10 @@ export default function Home() {
           ) : (
             <MenuInferiorMotorista
               setSolicitacoesCorrida={() => setSolicitacoesCorrida(true)}
+              disponivel={disponivel}
+              emCorrida={corrida !== null}
+              ocupado={ocupado}
+              onAlternarDisponibilidade={alternarDisponibilidade}
             />
           )}
         </>
@@ -323,27 +307,6 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  botaoDisponibilidade: {
-    position: "absolute",
-    top: 150,
-    left: 10,
-    backgroundColor: "#000",
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  textoDisponibilidade: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "600",
-    marginTop: 2,
-  },
   faixaErro: {
     position: "absolute",
     top: 110,
@@ -357,48 +320,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 13,
     textAlign: "center",
-  },
-  barraCorrida: {
-    position: "absolute",
-    top: 60,
-    left: 10,
-    right: 10,
-    backgroundColor: "#111",
-    borderRadius: 12,
-    padding: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  codigoCorrida: {
-    color: "#fbc02d",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  statusCorrida: {
-    flex: 1,
-    marginHorizontal: 10,
-  },
-  statusTexto: {
-    color: "#fff",
-    fontSize: 13,
-  },
-  chegadaTexto: {
-    color: "#fbc02d",
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  botaoAcao: {
-    backgroundColor: "#fbc02d",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  textoBotaoAcao: {
-    color: "#000",
-    fontWeight: "700",
-    fontSize: 13,
   },
   container: { flex: 1 },
   backdrop: {

@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/common/Texto";
+import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 
 // ==========================================================
 // 💡 Lógica de Cálculo das Ofertas
@@ -42,7 +43,10 @@ const NegociarChamada = ({
   percentualNegociacao = 40,
 }: NegociarChamadaProps) => {
   const [valorEscolhido, setValorEscolhido] = useState<number | null>(null);
-  const ofertas = useMemo(() => calcularOfertas(valorBase, percentualNegociacao), [valorBase, percentualNegociacao]);
+  const ofertas = useMemo(
+    () => calcularOfertas(valorBase, percentualNegociacao),
+    [valorBase, percentualNegociacao],
+  );
 
   const handleSelecionarOferta = (valor: number) => {
     if (valorEscolhido) return;
@@ -78,7 +82,12 @@ const NegociarChamada = ({
               onPress={() => handleSelecionarOferta(valor)}
               disabled={!!valorEscolhido}
             >
-              <Text style={[styles.textoBotao, isSelected ? styles.textoSelecionado : null]}>
+              <Text
+                style={[
+                  styles.textoBotao,
+                  isSelected ? styles.textoSelecionado : null,
+                ]}
+              >
                 R${valor.toFixed(2).replace(".", ",")}
               </Text>
             </TouchableOpacity>

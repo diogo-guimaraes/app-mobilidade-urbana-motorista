@@ -1,12 +1,12 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
   Dimensions,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -49,7 +49,7 @@ export default function MetodosPagamento({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -131,7 +131,11 @@ export default function MetodosPagamento({
             {/* Pagamento no App */}
             <View style={[styles.card, { opacity: 0.7 }]}>
               <View style={styles.cardLeft}>
-                <Ionicons name="phone-portrait-outline" size={22} color="#111" />
+                <Ionicons
+                  name="phone-portrait-outline"
+                  size={22}
+                  color="#111"
+                />
                 <View style={{ marginLeft: 10 }}>
                   <Text style={styles.cardTitle}>Pagamento no app</Text>
                   <Text style={styles.cardSubtitle}>
@@ -149,10 +153,7 @@ export default function MetodosPagamento({
 
             {/* Dinheiro */}
             <TouchableOpacity
-              style={[
-                styles.card,
-                pagamentos.dinheiro && styles.cardSelected,
-              ]}
+              style={[styles.card, pagamentos.dinheiro && styles.cardSelected]}
               onPress={() => togglePagamento("dinheiro")}
             >
               <View style={styles.cardLeft}>
@@ -163,9 +164,7 @@ export default function MetodosPagamento({
               </View>
               <Ionicons
                 name={
-                  pagamentos.dinheiro
-                    ? "checkmark-circle"
-                    : "ellipse-outline"
+                  pagamentos.dinheiro ? "checkmark-circle" : "ellipse-outline"
                 }
                 size={22}
                 color={pagamentos.dinheiro ? "#ffb300" : "#aaa"}
@@ -193,9 +192,7 @@ export default function MetodosPagamento({
               </View>
               <Ionicons
                 name={
-                  pagamentos.maquininha
-                    ? "checkmark-circle"
-                    : "ellipse-outline"
+                  pagamentos.maquininha ? "checkmark-circle" : "ellipse-outline"
                 }
                 size={22}
                 color={pagamentos.maquininha ? "#ffb300" : "#aaa"}

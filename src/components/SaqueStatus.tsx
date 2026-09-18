@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
   Dimensions,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -24,7 +24,7 @@ export default function SaqueStatus({
   visible,
   onClose,
   duration = 200,
-  valorSaque = "0,01"
+  valorSaque = "0,01",
 }: props) {
   const translateX = useRef(new Animated.Value(width)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
@@ -40,7 +40,7 @@ export default function SaqueStatus({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -125,7 +125,7 @@ export default function SaqueStatus({
               <Text style={styles.accountText}>Conta99</Text>
             </View>
             <View style={styles.bankIconContainer}>
-               <Ionicons name="business-outline" size={24} color="#333" />
+              <Ionicons name="business-outline" size={24} color="#333" />
             </View>
           </View>
 
@@ -166,13 +166,20 @@ export default function SaqueStatus({
           {/* Rodapé com Detalhamento de Valores */}
           <View style={styles.detailsContainer}>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Valor solicitado para saque</Text>
+              <Text style={styles.detailLabel}>
+                Valor solicitado para saque
+              </Text>
               <Text style={styles.detailValue}>R${valorSaque}</Text>
             </View>
             <View style={styles.detailRow}>
               <View style={styles.labelWithIcon}>
                 <Text style={styles.detailLabel}>Taxa de serviço</Text>
-                <Ionicons name="information-circle-outline" size={16} color="#ccc" style={{marginLeft: 4}} />
+                <Ionicons
+                  name="information-circle-outline"
+                  size={16}
+                  color="#ccc"
+                  style={{ marginLeft: 4 }}
+                />
               </View>
               <Text style={styles.detailValue}>- R$0,00</Text>
             </View>
@@ -217,39 +224,39 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   statusSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingTop: 30,
     paddingBottom: 20,
-    alignItems: 'flex-start'
+    alignItems: "flex-start",
   },
   statusTextContainer: {
     flex: 1,
   },
   processingText: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#FF6600', // Laranja do "Processando"
+    fontWeight: "700",
+    color: "#FF6600", // Laranja do "Processando"
     marginBottom: 8,
   },
   mainAmount: {
     fontSize: 36,
-    fontWeight: '700',
-    color: '#111',
+    fontWeight: "700",
+    color: "#111",
     marginBottom: 4,
   },
   accountText: {
     fontSize: 16,
-    color: '#333',
+    color: "#333",
   },
   bankIconContainer: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#f5f5f5",
+    justifyContent: "center",
+    alignItems: "center",
     marginTop: 10,
   },
   timelineContainer: {
@@ -257,11 +264,11 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   timelineItem: {
-    flexDirection: 'row',
+    flexDirection: "row",
     minHeight: 50,
   },
   timelineIndicator: {
-    alignItems: 'center',
+    alignItems: "center",
     width: 20,
     marginRight: 15,
   },
@@ -269,74 +276,74 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#ddd',
+    backgroundColor: "#ddd",
     zIndex: 2,
   },
   dotActive: {
-    backgroundColor: '#666',
+    backgroundColor: "#666",
   },
   line: {
     width: 2,
     flex: 1,
-    backgroundColor: '#eee',
+    backgroundColor: "#eee",
     marginVertical: -2,
   },
   lineActive: {
-    backgroundColor: '#eee',
+    backgroundColor: "#eee",
   },
   timelineContent: {
     flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingBottom: 20,
   },
   timelineLabel: {
     fontSize: 15,
-    color: '#333',
-    fontWeight: '500'
+    color: "#333",
+    fontWeight: "500",
   },
   timelineDate: {
     fontSize: 14,
-    color: '#999',
+    color: "#999",
   },
   detailsContainer: {
-    marginTop: 'auto',
+    marginTop: "auto",
     borderTopWidth: 8,
-    borderTopColor: '#f7f7f7',
+    borderTopColor: "#f7f7f7",
     padding: 20,
     paddingBottom: 40,
   },
   detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 10,
   },
   labelWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   detailLabel: {
     fontSize: 15,
-    color: '#555',
+    color: "#555",
   },
   detailValue: {
     fontSize: 15,
-    color: '#111',
+    color: "#111",
   },
   separator: {
     height: 1,
-    backgroundColor: '#eee',
+    backgroundColor: "#eee",
     marginVertical: 5,
   },
   detailLabelBold: {
     fontSize: 16,
-    color: '#111',
-    fontWeight: '500',
+    color: "#111",
+    fontWeight: "500",
   },
   detailValueBold: {
     fontSize: 16,
-    color: '#111',
-    fontWeight: '500',
+    color: "#111",
+    fontWeight: "500",
   },
 });

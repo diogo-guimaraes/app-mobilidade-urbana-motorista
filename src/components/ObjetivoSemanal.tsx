@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
   Dimensions,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -44,7 +44,7 @@ export default function ObjetivoSemanal({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -82,7 +82,15 @@ export default function ObjetivoSemanal({
 
   if (!isMounted) return null;
 
-  const FeatureItem = ({ icon, title, subtitle }: { icon: any; title: string; subtitle: string }) => (
+  const FeatureItem = ({
+    icon,
+    title,
+    subtitle,
+  }: {
+    icon: any;
+    title: string;
+    subtitle: string;
+  }) => (
     <TouchableOpacity style={styles.featureRow}>
       <View style={styles.featureIconContainer}>
         <Ionicons name={icon} size={24} color="#111" />
@@ -131,7 +139,10 @@ export default function ObjetivoSemanal({
             <View style={styles.goalCard}>
               <View style={styles.goalHeader}>
                 <Text style={styles.goalMainTitle}>Objetivo semanal</Text>
-                <TouchableOpacity onPress={mostrarDefinirMetaGanhos} style={styles.editButton}>
+                <TouchableOpacity
+                  onPress={mostrarDefinirMetaGanhos}
+                  style={styles.editButton}
+                >
                   <Ionicons name="pencil" size={14} color="#111" />
                   <Text style={styles.editButtonText}>Editar</Text>
                 </TouchableOpacity>
@@ -153,10 +164,12 @@ export default function ObjetivoSemanal({
                 </View>
 
                 <View style={styles.progressBarBg}>
-                  <View style={[styles.progressBarFill, { width: '18%' }]} />
+                  <View style={[styles.progressBarFill, { width: "18%" }]} />
                 </View>
 
-                <Text style={styles.continueText}>Continue aumentando seus ganhos</Text>
+                <Text style={styles.continueText}>
+                  Continue aumentando seus ganhos
+                </Text>
               </View>
             </View>
 

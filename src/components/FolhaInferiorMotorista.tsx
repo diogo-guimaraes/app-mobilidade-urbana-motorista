@@ -1,7 +1,8 @@
 import { useAuth } from "@/context/AuthProvider";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import React, { useCallback, useMemo, useRef } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text } from "@/components/common/Texto";
+import { StyleSheet, View } from "react-native";
 
 // 🔹 Definição das props que o componente recebe
 interface DriverSearchProps {

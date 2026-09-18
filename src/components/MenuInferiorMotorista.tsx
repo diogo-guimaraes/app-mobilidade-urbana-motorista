@@ -1,11 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Text } from "@/components/common/Texto";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Buscando from "./Buscando";
 
@@ -13,44 +9,52 @@ import Preferencias from "./Preferencias";
 
 interface props {
   setSolicitacoesCorrida: () => void;
+  disponivel: boolean;
+  emCorrida: boolean;
+  ocupado: boolean;
+  onAlternarDisponibilidade: (proximoEstado: boolean) => void;
 }
 
-export default function MenuInferiorMotorista({ setSolicitacoesCorrida }: props) {
-  // 💡 Estado para rastrear se estamos buscando corridas
-  const [buscandoCorrida, setBuscandoCorrida] = useState(false);
-  const [dialogPreferenciasVisible, setDialogPreferenciasVisibleLocal] = useState(false);
+export default function MenuInferiorMotorista({
+  setSolicitacoesCorrida,
+  disponivel,
+  emCorrida,
+  ocupado,
+  onAlternarDisponibilidade,
+}: props) {
+  const [dialogPreferenciasVisible, setDialogPreferenciasVisibleLocal] =
+    useState(false);
 
-  // 💡 Lógica para alternar entre "Conectar" (false) e "Buscando" (true)
-  const handleConnect = () => {
-    if (!buscandoCorrida) {
-      setBuscandoCorrida(true);
-    }
+  // em corrida não se desconecta pelo botão: a corrida tem os próprios passos
+  const bloqueado = ocupado || emCorrida;
+
+  const alternar = () => {
+    if (bloqueado) return;
+
+    onAlternarDisponibilidade(!disponivel);
   };
 
-  // 💡 NOVA FUNÇÃO: Lógica para desconectar/parar a busca, via ícone lateral
-  const handleDisconnect = () => {
-    if (buscandoCorrida) {
-      setBuscandoCorrida(false);
-    }
+  const desconectar = () => {
+    if (bloqueado || !disponivel) return;
+
+    onAlternarDisponibilidade(false);
   };
 
-  // Lógica para o botão de Configurações
   const MostrarPreferencias = () => {
     setDialogPreferenciasVisibleLocal(true);
   };
 
-  // 💡 Lógica para definir os estilos do botão com base no estado de busca
   const connectButtonStyle = [
     styles.connectButton,
-    buscandoCorrida
+    disponivel
       ? {
-        backgroundColor: "transparent",
-        shadowOpacity: 0,
-        elevation: 0,
-      }
+          backgroundColor: "transparent",
+          shadowOpacity: 0,
+          elevation: 0,
+        }
       : {
-        backgroundColor: "#FFD600",
-      },
+          backgroundColor: emCorrida ? "#E0E0E0" : "#FFD600",
+        },
   ];
 
   return (
@@ -58,9 +62,9 @@ export default function MenuInferiorMotorista({ setSolicitacoesCorrida }: props)
       <Preferencias
         visible={dialogPreferenciasVisible}
         onClose={() => setDialogPreferenciasVisibleLocal(false)}
-        onDisconnect={handleDisconnect}
-        buscandoCorrida={buscandoCorrida}
-      />      
+        onDisconnect={desconectar}
+        buscandoCorrida={disponivel}
+      />
 
       <SafeAreaView style={styles.bottomMenuWrapper}>
         <View style={styles.bottomMenu}>
@@ -72,20 +76,27 @@ export default function MenuInferiorMotorista({ setSolicitacoesCorrida }: props)
           >
             <Ionicons name="options-outline" size={40} color="#000" />
             {/* 🔴 Pontinho vermelho de status */}
-            <View style={[styles.redDot]} />
+            <View
+              style={[
+                styles.redDot,
+                { backgroundColor: disponivel ? "#22c55e" : "#E53935" },
+              ]}
+            />
           </TouchableOpacity>
-
 
           {/* 🔹 Botão central "Conectar" / "Buscando" */}
           <TouchableOpacity
             style={connectButtonStyle}
-            onPress={handleConnect}
+            onPress={alternar}
+            disabled={bloqueado}
             activeOpacity={0.9}
           >
-            {buscandoCorrida ? (
+            {disponivel ? (
               <Buscando />
             ) : (
-              <Text style={styles.connectTextLarge}>Conectar</Text>
+              <Text style={styles.connectTextLarge}>
+                {emCorrida ? "Em corrida" : ocupado ? "..." : "Conectar"}
+              </Text>
             )}
           </TouchableOpacity>
 

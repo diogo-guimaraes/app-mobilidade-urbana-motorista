@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -7,7 +8,6 @@ import {
   FlatList,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -32,7 +32,7 @@ const DISPOSITIVOS = [
   },
   {
     id: "2",
-    nome: "MacBook Pro 14\"",
+    nome: 'MacBook Pro 14"',
     localizacao: "Porto Velho, Brasil",
     ultimaSessao: "Último acesso: Ontem às 14:20",
     isCurrent: false,
@@ -67,7 +67,7 @@ export default function GestaoDispositivos({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -113,10 +113,12 @@ export default function GestaoDispositivos({
         </View>
         <View style={styles.textContainer}>
           <Text style={styles.deviceName}>{item.nome}</Text>
-          <Text style={styles.deviceSub}>{item.localizacao} • {item.ultimaSessao}</Text>
+          <Text style={styles.deviceSub}>
+            {item.localizacao} • {item.ultimaSessao}
+          </Text>
         </View>
       </View>
-      
+
       {!item.isCurrent && (
         <TouchableOpacity style={styles.logoutIconButton}>
           <Ionicons name="log-out-outline" size={20} color="#E74C3C" />
@@ -141,12 +143,7 @@ export default function GestaoDispositivos({
         />
       </Pressable>
 
-      <Animated.View
-        style={[
-          styles.drawer,
-          { transform: [{ translateX }] },
-        ]}
-      >
+      <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
         {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
@@ -163,7 +160,8 @@ export default function GestaoDispositivos({
           <View style={styles.introBox}>
             <Text style={styles.introTitle}>Sessões ativas</Text>
             <Text style={styles.introDesc}>
-              Estes são os dispositivos que acessaram sua conta recentemente. Se não reconhecer algum, desconecte-o imediatamente.
+              Estes são os dispositivos que acessaram sua conta recentemente. Se
+              não reconhecer algum, desconecte-o imediatamente.
             </Text>
           </View>
 
@@ -176,7 +174,9 @@ export default function GestaoDispositivos({
           />
 
           <TouchableOpacity style={styles.globalLogout}>
-            <Text style={styles.globalLogoutText}>Sair de todas as sessões</Text>
+            <Text style={styles.globalLogoutText}>
+              Sair de todas as sessões
+            </Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -233,25 +233,25 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   deviceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: "#f0f0f0",
   },
   deviceInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   iconCircle: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#f5f5f5",
+    justifyContent: "center",
+    alignItems: "center",
   },
   textContainer: {
     marginLeft: 12,
@@ -259,43 +259,43 @@ const styles = StyleSheet.create({
   },
   deviceName: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111',
+    fontWeight: "600",
+    color: "#111",
   },
   deviceSub: {
     fontSize: 12,
-    color: '#999',
+    color: "#999",
     marginTop: 2,
   },
   logoutIconButton: {
     padding: 8,
-    backgroundColor: '#FDEDEC',
+    backgroundColor: "#FDEDEC",
     borderRadius: 8,
   },
   currentBadge: {
-    backgroundColor: '#E8F8F5',
+    backgroundColor: "#E8F8F5",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
   },
   currentText: {
     fontSize: 10,
-    fontWeight: '800',
-    color: '#27AE60',
+    fontWeight: "800",
+    color: "#27AE60",
   },
   globalLogout: {
-    marginTop: 'auto',
+    marginTop: "auto",
     marginBottom: 10,
     height: 56,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#eee',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: "#eee",
+    justifyContent: "center",
+    alignItems: "center",
   },
   globalLogoutText: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#E74C3C',
+    fontWeight: "700",
+    color: "#E74C3C",
   },
 });

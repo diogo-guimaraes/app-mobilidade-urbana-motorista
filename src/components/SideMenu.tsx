@@ -2,13 +2,13 @@ import { useAuth } from "@/context/AuthProvider";
 import { AnimationConfig, useSlideAnimation } from "@/hooks/useSlideAnimation";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
   Image,
   PanResponder,
   StyleSheet,
-  Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,

@@ -4,7 +4,8 @@ import BottomSheet, {
   BottomSheetView,
 } from "@gorhom/bottom-sheet";
 import React, { useCallback, useMemo, useRef } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/common/Texto";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 
 // 🔹 Definição das props que o componente recebe
 interface DriverSearchProps {
@@ -28,7 +29,7 @@ export default function FolhaInferiorMotorista({
       // ✨ CHAMANDO CALLBACK: Notifica o componente pai sobre o índice atual
       onSheetChange(index);
     },
-    [onSheetChange]
+    [onSheetChange],
   );
 
   // dados das últimas corridas
@@ -45,7 +46,7 @@ export default function FolhaInferiorMotorista({
         cidade: "Curitiba, PR",
       },
     ],
-    []
+    [],
   );
 
   // render item da lista
@@ -72,7 +73,7 @@ export default function FolhaInferiorMotorista({
         </View>
       </TouchableOpacity>
     ),
-    [data]
+    [data],
   );
 
   return (

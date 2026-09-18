@@ -1,13 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text, TextInput } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
   Dimensions,
   Pressable,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -40,7 +39,7 @@ export default function DefinirMetaGanhos({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -139,18 +138,20 @@ export default function DefinirMetaGanhos({
 
         {/* FOOTER BUTTON */}
         <View style={styles.footer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
-                styles.mainButton, 
-                { backgroundColor: metaValue ? '#111' : '#F3F3F3' }
+              styles.mainButton,
+              { backgroundColor: metaValue ? "#111" : "#F3F3F3" },
             ]}
             disabled={!metaValue}
           >
-            <Text style={[
+            <Text
+              style={[
                 styles.mainButtonText,
-                { color: metaValue ? '#FFF' : '#AAA' }
-            ]}>
-                Inserir meta de ganhos
+                { color: metaValue ? "#FFF" : "#AAA" },
+              ]}
+            >
+              Inserir meta de ganhos
             </Text>
           </TouchableOpacity>
         </View>

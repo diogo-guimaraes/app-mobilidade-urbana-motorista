@@ -1,13 +1,8 @@
 import { CorridaParaAvaliar } from "@/hooks/useAvaliacaoPendente";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Text, TextInput } from "@/components/common/Texto";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface Props {

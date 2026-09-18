@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { AudioPlayer, createAudioPlayer } from "expo-audio";
 import React, { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   Easing,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -15,6 +15,13 @@ interface RecebendoChamadaProps {
   onAceitar: () => void;
   onRecusar: () => void;
   valor?: number;
+  distanciaAteOrigem?: number;
+  distanciaDaCorrida?: number;
+  origem?: string;
+  destino?: string | null;
+  paradas?: number;
+  notaPassageiro?: number | null;
+  corridasPassageiro?: number;
 }
 
 // ==========================================================
@@ -30,7 +37,7 @@ const PulseOverlay = () => {
   useEffect(() => {
     // Duração mais rápida para simular a urgência da chamada
     const DURATION = 2100;
-    const DELAY = DURATION / 3.5; //se quisar aplicar 
+    const DELAY = DURATION / 3.5; //se quisar aplicar
 
     // Função para criar o loop de pulso com atraso
     const createPulse = (animatedValue: Animated.Value, delay: number) => {
@@ -50,7 +57,7 @@ const PulseOverlay = () => {
             duration: 0,
             useNativeDriver: false,
           }),
-        ])
+        ]),
       );
     };
 
@@ -121,12 +128,35 @@ const pulseStyles = StyleSheet.create({
 export default function RecebendoChamadas({
   onAceitar,
   onRecusar,
-  valor = 8.20,
+  valor = 8.2,
+  distanciaAteOrigem,
+  distanciaDaCorrida,
+  origem,
+  destino,
+  paradas = 0,
+  notaPassageiro,
+  corridasPassageiro = 0,
 }: RecebendoChamadaProps) {
   const playerRef = useRef<AudioPlayer | null>(null);
+
+  const silenciar = (player: AudioPlayer | null) => {
+    if (!player) return;
+
+    try {
+      player.loop = false;
+    } catch {}
+
+    try {
+      player.pause();
+    } catch {}
+
+    try {
+      player.remove();
+    } catch {}
+  };
   const progress = useRef(new Animated.Value(1)).current;
   const closedRef = useRef(false); // evita múltiplas chamadas de fechamento
-  const DURATION = 10000;
+  const DURATION = 20000;
 
   // Variável para controlar a montagem/desmontagem do PulseOverlay
   // Usaremos um simples state para garantir que a animação seja reiniciada se o componente for remontado.
@@ -147,37 +177,42 @@ export default function RecebendoChamadas({
     let player: AudioPlayer | null = null;
 
     try {
-      player = createAudioPlayer(require("../../assets/TOQUE-CHAMADA.mp3"));
+      player = createAudioPlayer(require("../../assets/toque-chamada.mp3"));
       playerRef.current = player;
 
-      player.addListener("playbackStatusUpdate", (status) => {
-        if (!status?.didJustFinish || closedRef.current) return;
-
-        closedRef.current = true;
-        try {
-          onRecusar();
-        } catch {}
-      });
-
+      // o toque é curto: repete enquanto a chamada estiver na tela
+      player.loop = true;
       player.play();
     } catch {}
+
+    // quem fecha a chamada é o tempo da barra, não o fim do som
+    const expiracao = setTimeout(() => {
+      if (closedRef.current) return;
+
+      closedRef.current = true;
+      setIsPulsing(false);
+
+      silenciar(player);
+      playerRef.current = null;
+
+      try {
+        onRecusar();
+      } catch {}
+    }, DURATION);
 
     // cleanup do effect
     return () => {
       closedRef.current = true;
       setIsPulsing(false); // Pára o pulso ao desmontar
+      clearTimeout(expiracao);
 
-      try {
-        player?.remove(); // para e descarrega o player
-      } catch {}
+      silenciar(player); // para e descarrega o player
       playerRef.current = null;
     };
   }, []);
 
   const pararSom = () => {
-    try {
-      playerRef.current?.remove();
-    } catch {}
+    silenciar(playerRef.current);
     playerRef.current = null;
   };
 
@@ -215,16 +250,18 @@ export default function RecebendoChamadas({
     outputRange: ["0%", "100%"],
   });
 
-  const distancia = Math.random() > 0.5 ? "1,1 km" : "1,4 km";
-  const tempo = Math.random() > 0.5 ? "6min" : "7min";
-  const enderecoPartida =
-    Math.random() > 0.5
-      ? "R. Jerônimo de Ornelas, 7201, Aponiã"
-      : "R. Dom Pedro II, 432, Centro";
-  const enderecoDestino =
-    Math.random() > 0.5
-      ? "Rua Fluminense, 6538, Lagoinha"
-      : "Av. Mamoré, 271, Nova Porto";
+  const emKm = (valorEmKm?: number) =>
+    typeof valorEmKm === "number"
+      ? `${valorEmKm.toFixed(1).replace(".", ",")} km`
+      : "—";
+
+  const emReais = (valorEmReais: number) =>
+    `R$ ${valorEmReais.toFixed(2).replace(".", ",")}`;
+
+  const distanciaAteVoce = emKm(distanciaAteOrigem);
+  const distanciaViagem = emKm(distanciaDaCorrida);
+  const enderecoPartida = origem ?? "Endereço de partida";
+  const enderecoDestino = destino ?? "Endereço de destino";
 
   return (
     <View style={styles.overlay}>
@@ -240,7 +277,7 @@ export default function RecebendoChamadas({
         </View>
 
         <View style={styles.valorContainer}>
-          <Text style={styles.valorText}>R${valor.toFixed(2)}</Text>
+          <Text style={styles.valorText}>{emReais(valor)}</Text>
         </View>
 
         <View style={styles.infoPagamento}>
@@ -248,27 +285,34 @@ export default function RecebendoChamadas({
             <Ionicons name="cash-outline" size={18} color="#fff" />
           </View>
           <Text className="ml-2 mt-1" style={styles.topText}>
-            Negocia • R$1,44/km ~ 36min (30km)
+            {`${distanciaViagem} · ${emKm(distanciaAteOrigem)} até a partida`}
           </Text>
         </View>
 
         <View style={styles.perfilInfoContainer}>
-          <View style={[styles.infoItem]}>
-            <Ionicons className="ml-4" name="star" size={20} color="#FFD700" />
-            <Text className="ml-2 font-bold" style={styles.infoText}>
-              4,98
-            </Text>
-          </View>
+          {typeof notaPassageiro === "number" ? (
+            <>
+              <View style={styles.infoItem}>
+                <Ionicons
+                  className="ml-4"
+                  name="star"
+                  size={20}
+                  color="#FFD700"
+                />
+                <Text className="ml-2 font-bold" style={styles.infoText}>
+                  {notaPassageiro.toFixed(2).replace(".", ",")}
+                </Text>
+              </View>
 
-          {/* Separador */}
-          <Text style={styles.dot}>•</Text>
+              <Text style={styles.dot}>•</Text>
+            </>
+          ) : null}
 
-          {/* Corridas */}
           <View style={styles.infoItem}>
-            <Text
-              className="font-bold"
-              style={styles.infoText}>
-              615 corridas
+            <Text className="font-bold" style={styles.infoText}>
+              {corridasPassageiro === 0
+                ? "Primeira corrida"
+                : `${corridasPassageiro} ${corridasPassageiro === 1 ? "corrida" : "corridas"}`}
             </Text>
           </View>
         </View>
@@ -282,23 +326,16 @@ export default function RecebendoChamadas({
             <View style={[styles.badge, styles.badgeCorInicial]}>
               <Text style={styles.badgeText}>A</Text>
             </View>
-            <Text style={styles.infoTempoKm}>
-              {tempo} ({distancia})
-            </Text>
+            <Text style={styles.infoTempoKm}>{distanciaAteVoce} até você</Text>
           </View>
 
           {/* Endereço de partida (linha abaixo do tempo) */}
           <View style={styles.infoRow}>
-            <Ionicons
-              name="arrow-down-outline"
-              size={18}
-              color="white"
-            />
+            <Ionicons name="arrow-down-outline" size={18} color="white" />
             <Text className="ml-3" style={styles.infoText}>
               {enderecoPartida}
             </Text>
           </View>
-
 
           {/* espaço entre os dois blocos de tempo/endereço */}
           <View style={{ height: 2 }} />
@@ -309,13 +346,13 @@ export default function RecebendoChamadas({
               <Text style={styles.badgeText}>B</Text>
             </View>
             <Text style={[styles.infoTempoKm, { marginTop: 0 }]}>
-              {Math.round(Math.random() * 5) + 10}min (
-              {(Math.random() * 5 + 4).toFixed(1)}km)
+              {distanciaViagem} de viagem
+              {paradas > 0
+                ? ` · ${paradas} ${paradas === 1 ? "parada" : "paradas"}`
+                : ""}
             </Text>
           </View>
-          <Text
-            className="ml-8"
-            style={styles.infoText}>
+          <Text className="ml-8" style={styles.infoText}>
             {enderecoDestino}
           </Text>
         </View>
@@ -328,7 +365,7 @@ export default function RecebendoChamadas({
           }}
         >
           <Text style={styles.btnAceitarText}>
-            Aceitar por R${valor.toFixed(2)}
+            {`Aceitar por ${emReais(valor)}`}
           </Text>
         </TouchableOpacity>
 
@@ -340,7 +377,7 @@ export default function RecebendoChamadas({
             // Aqui você pode atualizar o estado ou chamar outra ação
           }}
         />
-      
+
         <TouchableOpacity
           style={styles.recusarBtn}
           onPress={() => {

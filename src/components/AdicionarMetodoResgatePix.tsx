@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text, TextInput } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -7,8 +8,6 @@ import {
   Keyboard,
   Pressable,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -79,7 +78,7 @@ export default function AdicionarMetodoResgate({
 
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, showConfirm, visibleMetodoResgateAdicionado, onClose]);

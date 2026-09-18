@@ -1,13 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text, TextInput } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
   Dimensions,
   Pressable,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -40,7 +39,7 @@ export default function AlterarEmail({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -125,18 +124,25 @@ export default function AlterarEmail({
           {/* Texto Informativo */}
           <Text style={styles.infoText}>
             Ao alterar seu e-mail, ele será usado para{" "}
-            <Text style={styles.boldText}>recuperação de conta</Text> e envio de recibos.
+            <Text style={styles.boldText}>recuperação de conta</Text> e envio de
+            recibos.
           </Text>
 
           <Text style={styles.subText}>
-            Enviaremos uma mensagem de confirmação para o novo endereço informado.
+            Enviaremos uma mensagem de confirmação para o novo endereço
+            informado.
           </Text>
 
           {/* Input de Email */}
           <View style={styles.inputWrapper}>
             <Text style={styles.label}>Novo e-mail</Text>
             <View style={styles.inputContainer}>
-              <Ionicons name="at-outline" size={20} color="#999" style={styles.inputIcon} />
+              <Ionicons
+                name="at-outline"
+                size={20}
+                color="#999"
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={styles.input}
                 placeholder="exemplo@email.com"
@@ -150,17 +156,19 @@ export default function AlterarEmail({
           </View>
 
           {/* Botão de Ação */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
-              styles.button, 
-              { backgroundColor: isValidEmail ? "#FFD600" : "#f0f0f0" }
+              styles.button,
+              { backgroundColor: isValidEmail ? "#FFD600" : "#f0f0f0" },
             ]}
             disabled={!isValidEmail}
           >
-            <Text style={[
-              styles.buttonText,
-              { color: isValidEmail ? "#111" : "#999" }
-            ]}>
+            <Text
+              style={[
+                styles.buttonText,
+                { color: isValidEmail ? "#111" : "#999" },
+              ]}
+            >
               Salvar alteração
             </Text>
           </TouchableOpacity>

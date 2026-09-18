@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -7,7 +8,6 @@ import {
   Easing,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -137,7 +137,7 @@ export default function DestinationDrawer({
 
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
 
     return () => subscription.remove();
@@ -222,7 +222,9 @@ export default function DestinationDrawer({
         {/* Conteúdo adicional (opções de corrida, etc.) viria aqui */}
         <View style={styles.contentContainer}>
           <Text style={styles.title}>Toque para selecionar uma</Text>
-          <Text style={styles.subtitle}>1 corrida(s) nas opções de corridas</Text>
+          <Text style={styles.subtitle}>
+            1 corrida(s) nas opções de corridas
+          </Text>
           <TouchableOpacity style={styles.button}>
             <Text style={styles.buttonText}>Nova</Text>
           </TouchableOpacity>

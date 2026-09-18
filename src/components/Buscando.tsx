@@ -1,11 +1,11 @@
 // Buscando.tsx
 import React, { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   Easing,
   LayoutChangeEvent,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 
@@ -55,7 +55,7 @@ export default function Buscando() {
 
         // espera visível (menos o tempo dos fades)
         await new Promise((res) =>
-          setTimeout(res, Math.max(0, WORD_DISPLAY_DELAY - FADE_DURATION * 2))
+          setTimeout(res, Math.max(0, WORD_DISPLAY_DELAY - FADE_DURATION * 2)),
         );
 
         // fade out
@@ -101,7 +101,7 @@ export default function Buscando() {
           easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
         }),
-      ])
+      ]),
     );
     anim.start();
     return () => anim.stop();

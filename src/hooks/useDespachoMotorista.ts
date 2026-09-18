@@ -16,12 +16,28 @@ export interface OfertaCorrida {
   origem: string;
   destino: string | null;
   paradas: number;
+  passageiro_nota: number | null;
+  passageiro_corridas: number;
 }
 
 export interface CorridaEmCurso {
   id: number;
   codigo_corrida: string;
   status_corrida: string;
+  corrida_destinos?: {
+    tipo: string;
+    endereco: string | null;
+    latitude: number | string | null;
+    longitude: number | string | null;
+  }[];
+}
+
+export interface PassageiroDaCorrida {
+  nome: string;
+  foto: string | null;
+  telefone: string | null;
+  nota: number | null;
+  corridas: number;
 }
 
 export interface ChegadaEstimada {
@@ -42,6 +58,13 @@ export function useDespachoMotorista() {
   const [oferta, setOferta] = useState<OfertaCorrida | null>(null);
   const [corrida, setCorrida] = useState<CorridaEmCurso | null>(null);
   const [chegada, setChegada] = useState<ChegadaEstimada | null>(null);
+  const [passageiro, setPassageiro] = useState<PassageiroDaCorrida | null>(
+    null,
+  );
+  const [posicao, setPosicao] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const [erro, setErro] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [socketAtivo, setSocketAtivo] = useState(false);
@@ -64,18 +87,36 @@ export function useDespachoMotorista() {
       const { data } = await api.get<{
         corrida: CorridaEmCurso | null;
         chegada: ChegadaEstimada | null;
+        passageiro: PassageiroDaCorrida | null;
       }>("/minha-corrida-atual");
 
       setCorrida(data?.corrida ?? null);
       setChegada(data?.chegada ?? null);
+      setPassageiro(data?.passageiro ?? null);
+    } catch {
+      // silencioso: é só sincronização de estado
+    }
+  }, []);
+
+  // o servidor é a fonte da verdade: abrir o app sem isso deixava o motorista
+  // recebendo corridas no backend enquanto a tela mostrava "Conectar"
+  const sincronizarSituacao = useCallback(async () => {
+    try {
+      const { data } = await api.get<{
+        disponivel: boolean;
+        corrida: CorridaEmCurso | null;
+      }>("/motorista/situacao");
+
+      setDisponivel(Boolean(data?.disponivel));
+      setCorrida(data?.corrida ?? null);
     } catch {
       // silencioso: é só sincronização de estado
     }
   }, []);
 
   useEffect(() => {
-    carregarCorridaAtual();
-  }, [carregarCorridaAtual]);
+    sincronizarSituacao().then(carregarCorridaAtual);
+  }, [sincronizarSituacao, carregarCorridaAtual]);
 
   const alternarDisponibilidade = useCallback(
     async (novoEstado: boolean) => {
@@ -190,11 +231,16 @@ export function useDespachoMotorista() {
 
       if (cancelado || posicao === null) return;
 
+      setPosicao(posicao);
+
       try {
         await api.post("/motorista/posicao", posicao);
       } catch {
         // posição é informativa; falhar aqui não pode atrapalhar a corrida
       }
+
+      // posição nova, previsão nova
+      if (!cancelado) await carregarCorridaAtual();
     };
 
     enviarPosicao();
@@ -205,7 +251,7 @@ export function useDespachoMotorista() {
       cancelado = true;
       clearInterval(relogio);
     };
-  }, [corrida, posicaoAtual]);
+  }, [corrida, posicaoAtual, carregarCorridaAtual]);
 
   const aceitar = useCallback(async () => {
     if (oferta === null) return;
@@ -221,13 +267,16 @@ export function useDespachoMotorista() {
       setCorrida(data);
       setOferta(null);
       setDisponivel(false);
+
+      // a resposta do aceite não traz passageiro nem previsão de chegada
+      await carregarCorridaAtual();
     } catch (falha) {
       setErro(mensagemDoErro(falha, "Não foi possível aceitar a corrida."));
       setOferta(null);
     } finally {
       setOcupado(false);
     }
-  }, [oferta]);
+  }, [oferta, carregarCorridaAtual]);
 
   const recusar = useCallback(() => {
     if (oferta !== null) recusadas.current.add(oferta.corrida_id);
@@ -269,6 +318,8 @@ export function useDespachoMotorista() {
     oferta,
     corrida,
     chegada,
+    passageiro,
+    posicao,
     erro,
     ocupado,
     alternarDisponibilidade,

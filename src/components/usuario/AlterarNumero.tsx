@@ -1,13 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text, TextInput } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
   Dimensions,
   Pressable,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -40,7 +39,7 @@ export default function AlterarNumero({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -149,17 +148,22 @@ export default function AlterarNumero({
           </View>
 
           {/* Botão de Ação */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
-              styles.button, 
-              { backgroundColor: phoneNumber.length > 10 ? "#FFD600" : "#f0f0f0" }
+              styles.button,
+              {
+                backgroundColor:
+                  phoneNumber.length > 10 ? "#FFD600" : "#f0f0f0",
+              },
             ]}
             disabled={phoneNumber.length <= 10}
           >
-            <Text style={[
-              styles.buttonText,
-              { color: phoneNumber.length > 10 ? "#111" : "#999" }
-            ]}>
+            <Text
+              style={[
+                styles.buttonText,
+                { color: phoneNumber.length > 10 ? "#111" : "#999" },
+              ]}
+            >
               Próximo
             </Text>
           </TouchableOpacity>

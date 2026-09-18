@@ -1,11 +1,11 @@
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -27,7 +27,7 @@ const GanhoDiario = ({ visible, setVisible }: GanhoDiarioProps) => {
 
   const { slideAnim, overlayOpacity, closeAnimation } = useModalAnimation(
     modalRenderizado,
-    { slideFrom: "top", duration: 200, overlayDuration: 300 }
+    { slideFrom: "top", duration: 200, overlayDuration: 300 },
   );
   const [dialogHistoricoCorridaVisible, setDialogHistoricoCorrida] =
     useState(false);

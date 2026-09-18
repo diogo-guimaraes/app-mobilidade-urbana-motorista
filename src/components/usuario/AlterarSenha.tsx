@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text, TextInput } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -7,8 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -34,7 +33,7 @@ export default function AlterarSenha({
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  
+
   // Estados para visibilidade da senha
   const [showPass1, setShowPass1] = useState(false);
   const [showPass2, setShowPass2] = useState(false);
@@ -50,7 +49,7 @@ export default function AlterarSenha({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -88,9 +87,19 @@ export default function AlterarSenha({
 
   if (!isMounted) return null;
 
-  const isFormValid = currentPassword.length >= 6 && newPassword.length >= 6 && newPassword === confirmPassword;
+  const isFormValid =
+    currentPassword.length >= 6 &&
+    newPassword.length >= 6 &&
+    newPassword === confirmPassword;
 
-  const PasswordInput = ({ label, value, onChange, show, setShow, placeholder }: any) => (
+  const PasswordInput = ({
+    label,
+    value,
+    onChange,
+    show,
+    setShow,
+    placeholder,
+  }: any) => (
     <View style={styles.inputWrapper}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.inputContainer}>
@@ -103,7 +112,11 @@ export default function AlterarSenha({
           onChangeText={onChange}
         />
         <TouchableOpacity onPress={() => setShow(!show)} style={styles.eyeIcon}>
-          <Ionicons name={show ? "eye-off-outline" : "eye-outline"} size={22} color="#999" />
+          <Ionicons
+            name={show ? "eye-off-outline" : "eye-outline"}
+            size={22}
+            color="#999"
+          />
         </TouchableOpacity>
       </View>
     </View>
@@ -139,7 +152,10 @@ export default function AlterarSenha({
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.body}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Ilustração */}
           <View style={styles.illustrationContainer}>
             <View style={styles.iconCircle}>
@@ -151,49 +167,53 @@ export default function AlterarSenha({
           </View>
 
           <Text style={styles.infoText}>
-            Sua nova senha deve ter pelo menos <Text style={styles.boldText}>6 caracteres</Text> e ser diferente da atual.
+            Sua nova senha deve ter pelo menos{" "}
+            <Text style={styles.boldText}>6 caracteres</Text> e ser diferente da
+            atual.
           </Text>
 
           {/* Campos de Senha */}
-          <PasswordInput 
-            label="Senha atual" 
+          <PasswordInput
+            label="Senha atual"
             placeholder="Digite sua senha atual"
-            value={currentPassword} 
-            onChange={setCurrentPassword} 
-            show={showPass1} 
-            setShow={setShowPass1} 
+            value={currentPassword}
+            onChange={setCurrentPassword}
+            show={showPass1}
+            setShow={setShowPass1}
           />
 
-          <PasswordInput 
-            label="Nova senha" 
+          <PasswordInput
+            label="Nova senha"
             placeholder="Crie uma nova senha forte"
-            value={newPassword} 
-            onChange={setNewPassword} 
-            show={showPass2} 
-            setShow={setShowPass2} 
+            value={newPassword}
+            onChange={setNewPassword}
+            show={showPass2}
+            setShow={setShowPass2}
           />
 
-          <PasswordInput 
-            label="Confirmar nova senha" 
+          <PasswordInput
+            label="Confirmar nova senha"
             placeholder="Repita a nova senha"
-            value={confirmPassword} 
-            onChange={setConfirmPassword} 
-            show={showPass3} 
-            setShow={setShowPass3} 
+            value={confirmPassword}
+            onChange={setConfirmPassword}
+            show={showPass3}
+            setShow={setShowPass3}
           />
 
           {/* Botão de Ação */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
-              styles.button, 
-              { backgroundColor: isFormValid ? "#FFD600" : "#f0f0f0" }
+              styles.button,
+              { backgroundColor: isFormValid ? "#FFD600" : "#f0f0f0" },
             ]}
             disabled={!isFormValid}
           >
-            <Text style={[
-              styles.buttonText,
-              { color: isFormValid ? "#111" : "#999" }
-            ]}>
+            <Text
+              style={[
+                styles.buttonText,
+                { color: isFormValid ? "#111" : "#999" },
+              ]}
+            >
               Atualizar senha
             </Text>
           </TouchableOpacity>

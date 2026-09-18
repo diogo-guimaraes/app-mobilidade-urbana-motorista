@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -8,7 +9,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -40,7 +40,7 @@ export default function RequisitoEnvioDocumentoFisico({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible]);
@@ -148,9 +148,7 @@ export default function RequisitoEnvioDocumentoFisico({
           <Text style={styles.link}>Clique aqui para acessar o site</Text>
 
           {/* ERROS */}
-          <Text style={styles.sectionTitle}>
-            Erros comuns a serem evitados
-          </Text>
+          <Text style={styles.sectionTitle}>Erros comuns a serem evitados</Text>
 
           <View style={styles.grid}>
             {[

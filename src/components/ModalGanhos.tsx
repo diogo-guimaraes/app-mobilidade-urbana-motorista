@@ -1,7 +1,16 @@
 // components/ModalGanhos.tsx
-import { ModalAnimationConfig, useModalAnimation } from "@/hooks/useModalAnimation";
+import {
+  ModalAnimationConfig,
+  useModalAnimation,
+} from "@/hooks/useModalAnimation";
 import React, { useEffect, useRef } from "react";
-import { Animated, PanResponder, Pressable, StyleSheet, View } from "react-native";
+import {
+  Animated,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
 
 interface ModalGanhosProps {
   visible: boolean;
@@ -18,14 +27,14 @@ export default function ModalGanhos({
 }: ModalGanhosProps) {
   const { slideAnim, overlayOpacity, closeAnimation } = useModalAnimation(
     visible,
-    config
+    config,
   );
 
- const handleClose = () => {
-  closeAnimation(() => {
-    onClose?.(); // Fecha no final da animação
-  });
-};
+  const handleClose = () => {
+    closeAnimation(() => {
+      onClose?.(); // Fecha no final da animação
+    });
+  };
 
   const pan = useRef(new Animated.Value(0)).current;
 
@@ -56,29 +65,30 @@ export default function ModalGanhos({
           }).start();
         }
       },
-    })
+    }),
   ).current;
 
   const [mounted, setMounted] = React.useState(visible);
   useEffect(() => {
-  if (visible) setMounted(true);
-  else {
-    // espera a duração da animação antes de desmontar
-    const timer = setTimeout(() => setMounted(false), config.duration || 400);
-    return () => clearTimeout(timer);
-  }
-}, [visible, config.duration]);
+    if (visible) setMounted(true);
+    else {
+      // espera a duração da animação antes de desmontar
+      const timer = setTimeout(() => setMounted(false), config.duration || 400);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, config.duration]);
 
- if (!mounted) return null;
+  if (!mounted) return null;
 
   const combinedTranslateY = Animated.add(slideAnim, pan);
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={visible ? "auto" : "none"}>
+    <View
+      style={StyleSheet.absoluteFill}
+      pointerEvents={visible ? "auto" : "none"}
+    >
       <Pressable style={StyleSheet.absoluteFill} onPress={handleClose}>
-        <Animated.View
-          style={[styles.backdrop, { opacity: overlayOpacity }]}
-        />
+        <Animated.View style={[styles.backdrop, { opacity: overlayOpacity }]} />
       </Pressable>
 
       <Animated.View

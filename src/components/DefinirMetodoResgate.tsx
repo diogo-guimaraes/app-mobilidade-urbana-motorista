@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -7,7 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -44,7 +44,7 @@ export default function DefinirMetodoResgate({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -88,7 +88,7 @@ export default function DefinirMetodoResgate({
     description: string,
     icon: any,
     iconColor: string,
-    tag?: string
+    tag?: string,
   ) => (
     <TouchableOpacity
       style={styles.optionContainer}
@@ -160,7 +160,7 @@ export default function DefinirMetodoResgate({
               color="#fff"
             />,
             "#ff6600",
-            "Recomendado"
+            "Recomendado",
           )}
 
           {renderOption(
@@ -168,7 +168,7 @@ export default function DefinirMetodoResgate({
             "Chave Pix",
             "Receba transferências automáticas no seu cartão toda quarta-feira. Você receberá os ganhos em 1 ou 2 dias úteis.",
             <Ionicons name="qr-code-outline" size={20} color="#fff" />,
-            "#2db089"
+            "#2db089",
           )}
 
           {renderOption(
@@ -180,7 +180,7 @@ export default function DefinirMetodoResgate({
               size={22}
               color="#fff"
             />,
-            "#ff6600"
+            "#ff6600",
           )}
         </ScrollView>
       </Animated.View>

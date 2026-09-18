@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -7,7 +8,6 @@ import {
   Pressable,
   StyleSheet,
   Switch,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -20,7 +20,11 @@ interface props {
   duration?: number;
 }
 
-export default function PreferenciasSomVoz({ visible, onClose, duration = 200 }: props) {
+export default function PreferenciasSomVoz({
+  visible,
+  onClose,
+  duration = 200,
+}: props) {
   const translateX = useRef(new Animated.Value(width)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const [isMounted, setIsMounted] = useState(visible);
@@ -41,7 +45,7 @@ export default function PreferenciasSomVoz({ visible, onClose, duration = 200 }:
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -148,11 +152,7 @@ export default function PreferenciasSomVoz({ visible, onClose, duration = 200 }:
           {/* VOLUME ALERTA */}
           <TouchableOpacity style={styles.rowTouchable}>
             <Text style={styles.label}>Vol. alerta de novo pedido</Text>
-            <Ionicons
-              name="chevron-forward-outline"
-              size={20}
-              color="#aaa"
-            />
+            <Ionicons name="chevron-forward-outline" size={20} color="#aaa" />
           </TouchableOpacity>
           <Text style={styles.subtext}>Usar mesmo volume do telefone</Text>
 
@@ -161,7 +161,9 @@ export default function PreferenciasSomVoz({ visible, onClose, duration = 200 }:
 
           {/* COMANDOS DE VOZ */}
           <View style={styles.row}>
-            <Text style={styles.label}>Comandos de voz de atividades da corrida</Text>
+            <Text style={styles.label}>
+              Comandos de voz de atividades da corrida
+            </Text>
             <Switch
               value={vozAtividade}
               onValueChange={setVozAtividade}
@@ -171,7 +173,9 @@ export default function PreferenciasSomVoz({ visible, onClose, duration = 200 }:
           </View>
 
           <View style={styles.row}>
-            <Text style={styles.label}>Comandos de voz de mensagens do passageiro</Text>
+            <Text style={styles.label}>
+              Comandos de voz de mensagens do passageiro
+            </Text>
             <Switch
               value={vozMensagem}
               onValueChange={setVozMensagem}

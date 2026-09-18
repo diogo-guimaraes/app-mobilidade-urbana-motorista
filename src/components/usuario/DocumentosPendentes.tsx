@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
+import { Text } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
@@ -7,7 +8,6 @@ import {
   FlatList,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -22,10 +22,34 @@ interface props {
 
 // Mock de dados para os documentos
 const DOCUMENTOS = [
-  { id: '1', titulo: 'Documento de Identidade (RG)', data: 'Enviado em 12/03/2026', status: 'Aprovado', icon: 'person-card-outline' },
-  { id: '2', titulo: 'Comprovante de Residência', data: 'Enviado em 12/03/2026', status: 'Em análise', icon: 'home-outline' },
-  { id: '3', titulo: 'CNH (Motorista)', data: 'Enviado em 10/03/2026', status: 'Aprovado', icon: 'car-outline' },
-  { id: '4', titulo: 'Antecedentes Criminais', data: 'Enviado em 05/03/2026', status: 'Recusado', icon: 'document-text-outline' },
+  {
+    id: "1",
+    titulo: "Documento de Identidade (RG)",
+    data: "Enviado em 12/03/2026",
+    status: "Aprovado",
+    icon: "person-card-outline",
+  },
+  {
+    id: "2",
+    titulo: "Comprovante de Residência",
+    data: "Enviado em 12/03/2026",
+    status: "Em análise",
+    icon: "home-outline",
+  },
+  {
+    id: "3",
+    titulo: "CNH (Motorista)",
+    data: "Enviado em 10/03/2026",
+    status: "Aprovado",
+    icon: "car-outline",
+  },
+  {
+    id: "4",
+    titulo: "Antecedentes Criminais",
+    data: "Enviado em 05/03/2026",
+    status: "Recusado",
+    icon: "document-text-outline",
+  },
 ];
 
 export default function DocumentosEnviados({
@@ -47,7 +71,7 @@ export default function DocumentosEnviados({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      onBackPress
+      onBackPress,
     );
     return () => subscription.remove();
   }, [visible, onClose]);
@@ -87,9 +111,9 @@ export default function DocumentosEnviados({
 
   const renderItem = ({ item }: any) => {
     const getStatusColor = (status: string) => {
-      if (status === 'Aprovado') return '#2ECC71';
-      if (status === 'Em análise') return '#F1C40F';
-      return '#E74C3C';
+      if (status === "Aprovado") return "#2ECC71";
+      if (status === "Em análise") return "#F1C40F";
+      return "#E74C3C";
     };
 
     return (
@@ -103,10 +127,17 @@ export default function DocumentosEnviados({
             <Text style={styles.docDate}>{item.data}</Text>
           </View>
         </View>
-        
+
         <View style={styles.statusBadge}>
-          <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
-          <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+          <View
+            style={[
+              styles.statusDot,
+              { backgroundColor: getStatusColor(item.status) },
+            ]}
+          />
+          <Text
+            style={[styles.statusText, { color: getStatusColor(item.status) }]}
+          >
             {item.status}
           </Text>
         </View>
@@ -125,12 +156,7 @@ export default function DocumentosEnviados({
         />
       </Pressable>
 
-      <Animated.View
-        style={[
-          styles.drawer,
-          { transform: [{ translateX }] },
-        ]}
-      >
+      <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
         {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
@@ -145,9 +171,14 @@ export default function DocumentosEnviados({
         {/* BODY */}
         <View style={styles.body}>
           <View style={styles.descriptionBox}>
-            <Ionicons name="information-circle-outline" size={20} color="#666" />
+            <Ionicons
+              name="information-circle-outline"
+              size={20}
+              color="#666"
+            />
             <Text style={styles.descriptionText}>
-              Aqui você pode acompanhar o status de validação dos documentos que você enviou para a nossa plataforma.
+              Aqui você pode acompanhar o status de validação dos documentos que
+              você enviou para a nossa plataforma.
             </Text>
           </View>
 
@@ -199,22 +230,22 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   descriptionBox: {
-    flexDirection: 'row',
-    backgroundColor: '#f8f9fa',
+    flexDirection: "row",
+    backgroundColor: "#f8f9fa",
     padding: 16,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#eee',
+    borderColor: "#eee",
   },
   descriptionText: {
     flex: 1,
     fontSize: 13,
-    color: '#666',
+    color: "#666",
     marginLeft: 10,
     lineHeight: 18,
   },
@@ -222,28 +253,28 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: "#f0f0f0",
     marginBottom: 12,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   cardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   iconContainer: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#f5f5f5",
+    justifyContent: "center",
+    alignItems: "center",
   },
   infoContainer: {
     marginLeft: 12,
@@ -251,21 +282,21 @@ const styles = StyleSheet.create({
   },
   docTitle: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
   },
   docDate: {
     fontSize: 12,
-    color: '#999',
+    color: "#999",
     marginTop: 2,
   },
   statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: '#fafafa',
+    backgroundColor: "#fafafa",
   },
   statusDot: {
     width: 6,
@@ -275,23 +306,23 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    fontWeight: "700",
+    textTransform: "uppercase",
   },
   newDocButton: {
-    flexDirection: 'row',
+    flexDirection: "row",
     height: 54,
-    backgroundColor: '#FFD600',
+    backgroundColor: "#FFD600",
     borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginTop: 10,
     marginBottom: 10,
   },
   newDocText: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#111',
+    fontWeight: "700",
+    color: "#111",
     marginLeft: 8,
   },
 });
