@@ -1,7 +1,8 @@
 import { useAuth } from "@/context/AuthProvider";
 import { AnimationConfig, useSlideAnimation } from "@/hooks/useSlideAnimation";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Text } from "@/components/common/Texto";
 import {
   Animated,
@@ -57,6 +58,7 @@ export default function SideMenu({
   showOverlay = true,
   enableSwipeGesture = true,
 }: SideMenuProps) {
+  const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
   const { translateX, overlayOpacity, closeAnimation } = useSlideAnimation(
     visible,
@@ -126,11 +128,22 @@ export default function SideMenu({
       onBackPress,
     );
     return () => subscription.remove();
-  }, [visible, closeMenu]);
+  }, [
+    visible,
+    closeMenu,
+    showPreferencias,
+    showCentralGannhos,
+    showPefilUsuario,
+    showConvidarMotorista,
+    showHorasDirigindo,
+    showHistoricoMensagens,
+    showCentralAjuda,
+    showMeusVeiculos,
+  ]);
 
   useEffect(() => {
     if (visible) {
-      setIsMounted(true);
+      setTimeout(() => setIsMounted(true), 0);
     } else {
       const closeDelay = animationConfig?.duration ?? 300;
       const t = setTimeout(() => setIsMounted(false), closeDelay + 20);
@@ -138,29 +151,37 @@ export default function SideMenu({
     }
   }, [visible, animationConfig?.duration]);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => enableSwipeGesture,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return enableSwipeGesture && Math.abs(gestureState.dx) > 10;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx < 0) translateX.setValue(gestureState.dx);
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx < -50 || gestureState.vx < -0.5) {
-          closeMenu();
-        } else {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            damping: animationConfig.damping || 20,
-            stiffness: animationConfig.stiffness || 90,
-          }).start();
-        }
-      },
-    }),
-  ).current;
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => enableSwipeGesture,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return enableSwipeGesture && Math.abs(gestureState.dx) > 10;
+        },
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dx < 0) translateX.setValue(gestureState.dx);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dx < -50 || gestureState.vx < -0.5) {
+            closeMenu();
+          } else {
+            Animated.spring(translateX, {
+              toValue: 0,
+              useNativeDriver: true,
+              damping: animationConfig.damping || 20,
+              stiffness: animationConfig.stiffness || 90,
+            }).start();
+          }
+        },
+      }),
+    [
+      animationConfig.damping,
+      animationConfig.stiffness,
+      closeMenu,
+      enableSwipeGesture,
+      translateX,
+    ],
+  );
 
   const handleLogout = () => {
     closeMenu();
@@ -245,6 +266,7 @@ export default function SideMenu({
             styles.sideMenu,
             {
               width: drawerWidth,
+              paddingTop: Math.max(insets.top + 12, 40),
               transform: [{ translateX }],
             },
           ]}

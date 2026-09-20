@@ -1,5 +1,5 @@
 // Buscando.tsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Text } from "@/components/common/Texto";
 import {
   Animated,
@@ -29,10 +29,10 @@ export default function Buscando() {
   const [index, setIndex] = useState(0);
 
   // animação de opacidade da palavra
-  const opacity = useRef(new Animated.Value(0)).current;
+  const [opacity] = useState(() => new Animated.Value(0));
 
   // animação da linha (0 -> 1), será interpolada para translateX com base no width do contêiner
-  const lineAnim = useRef(new Animated.Value(0)).current;
+  const [lineAnim] = useState(() => new Animated.Value(0));
 
   // largura do container disponível (usado para calcular range da linha)
   const [containerWidth, setContainerWidth] = useState(0);
@@ -111,7 +111,7 @@ export default function Buscando() {
   const lineTranslateX = lineAnim.interpolate({
     inputRange: [0, 1],
     // vamos mover a linha entre 0 e (containerWidth - lineWidth)
-    outputRange: [0, Math.max(0, containerWidth - 48)], // 48 => largura do elemento em que a linha se move (ajuste mais abaixo)
+    outputRange: [0, Math.max(0, containerWidth - 44)],
     extrapolate: "clamp",
   });
 
@@ -143,6 +143,7 @@ export default function Buscando() {
           ]}
           accessible
           accessibilityRole="text"
+          numberOfLines={1}
         >
           {WORDS[index]}
         </Animated.Text>
@@ -183,18 +184,20 @@ const styles = StyleSheet.create({
   },
   center: {
     alignItems: "center",
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: 12,
   },
   word: {
     color: "#000",
-    fontSize: 28,
+    fontSize: 20,
+    lineHeight: 25,
     fontWeight: "700",
     letterSpacing: 0.3,
   },
   hint: {
-    marginTop: 6,
-    fontSize: 12,
+    marginTop: 4,
+    fontSize: 11,
+    lineHeight: 15,
     color: "#666",
   },
   lineWrapper: {
@@ -204,7 +207,7 @@ const styles = StyleSheet.create({
   },
   lineTrack: {
     width: "82%", // área na qual a "pill" se move (ajuste pra seu layout)
-    height: 8,
+    height: 6,
     backgroundColor: "#F0F0F0",
     borderRadius: 999,
     overflow: "hidden",
@@ -213,8 +216,8 @@ const styles = StyleSheet.create({
   linePill: {
     position: "absolute",
     left: 0,
-    width: 48, // largura da "pílula" móvel
-    height: 8,
+    width: 44,
+    height: 6,
     borderRadius: 999,
     backgroundColor: "#FFD600", // amarelo similar ao design
     // sombra leve (iOS)

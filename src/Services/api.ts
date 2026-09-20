@@ -1,7 +1,7 @@
-import axios from "axios";
+import axios, { create } from "axios";
 import * as SecureStore from "expo-secure-store";
 
-export const api = axios.create({
+export const api = create({
   baseURL: process.env.EXPO_PUBLIC_API_URL,
   headers: {
     Accept: "application/json",
@@ -79,7 +79,11 @@ api.interceptors.response.use(
 
     const tinhaToken = Boolean(config?.headers?.Authorization);
 
-    if (error?.response?.status === 401 && tinhaToken) {
+    if (
+      error?.response?.status === 401 &&
+      tinhaToken &&
+      config?.url !== "/auth/logout"
+    ) {
       if (!config.__jaTentouRenovar) {
         config.__jaTentouRenovar = true;
 

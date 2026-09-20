@@ -1,4 +1,5 @@
 import { api } from "@/Services/api";
+import { useToast } from "@/context/ToastContext";
 import { useCallback, useEffect, useState } from "react";
 
 export interface CorridaParaAvaliar {
@@ -11,6 +12,7 @@ export interface CorridaParaAvaliar {
 }
 
 export function useAvaliacaoPendente(recarregarQuando: unknown) {
+  const { mostrarToast } = useToast();
   const [corrida, setCorrida] = useState<CorridaParaAvaliar | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -30,7 +32,9 @@ export function useAvaliacaoPendente(recarregarQuando: unknown) {
   }, []);
 
   useEffect(() => {
-    buscar();
+    const timer = setTimeout(() => void buscar(), 0);
+
+    return () => clearTimeout(timer);
   }, [buscar, recarregarQuando]);
 
   const avaliar = useCallback(
@@ -47,15 +51,25 @@ export function useAvaliacaoPendente(recarregarQuando: unknown) {
         });
 
         setCorrida(null);
+        mostrarToast({
+          tipo: "success",
+          titulo: "Avaliação enviada",
+          mensagem: `Corrida ${corrida.codigo_corrida}.`,
+        });
 
         return true;
       } catch {
+        mostrarToast({
+          tipo: "error",
+          titulo: "A avaliação não foi salva",
+          mensagem: "Confira sua conexão e tente enviar novamente.",
+        });
         return false;
       } finally {
         setEnviando(false);
       }
     },
-    [corrida],
+    [corrida, mostrarToast],
   );
 
   const dispensar = useCallback(() => setCorrida(null), []);

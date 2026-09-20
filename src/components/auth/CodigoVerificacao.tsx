@@ -173,7 +173,7 @@ export default function CodigoVerificacao({
   // Animação
   useEffect(() => {
     if (visible) {
-      setIsMounted(true);
+      setTimeout(() => setIsMounted(true), 0);
 
       Animated.parallel([
         Animated.timing(translateX, {
@@ -207,15 +207,19 @@ export default function CodigoVerificacao({
         }),
       ]).start(({ finished }) => finished && setIsMounted(false));
     }
-  }, [visible, translateX, overlayOpacity, duration]);
+  }, [visible, translateX, overlayOpacity, duration, width]);
 
   // Limpa estados
   useEffect(() => {
     if (!visible) {
-      setCode(["", "", "", ""]);
-      setHasError(false);
-      setIsLoading(false);
-      setRecebendoCodigo(false);
+      const timer = setTimeout(() => {
+        setCode(["", "", "", ""]);
+        setHasError(false);
+        setIsLoading(false);
+        setRecebendoCodigo(false);
+      }, 0);
+
+      return () => clearTimeout(timer);
     }
   }, [visible]);
 

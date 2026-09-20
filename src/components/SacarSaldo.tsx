@@ -1,5 +1,6 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Text, TextInput } from "@/components/common/Texto";
 import {
   Animated,
@@ -26,16 +27,52 @@ export default function SacarSaldo({
   onClose,
   duration = 200,
 }: props) {
-  const translateX = useRef(new Animated.Value(width)).current;
-  const overlayOpacity = useRef(new Animated.Value(0)).current;
-  const slideConfirm = useRef(new Animated.Value(height)).current;
-  const confirmOverlayOpacity = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
+  const [translateX] = useState(() => new Animated.Value(width));
+  const [overlayOpacity] = useState(() => new Animated.Value(0));
+  const [slideConfirm] = useState(() => new Animated.Value(height));
+  const [confirmOverlayOpacity] = useState(() => new Animated.Value(0));
 
   const [isMounted, setIsMounted] = useState(visible);
   const [valor, setValor] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const [saqueStatus, setSaqueStatus] = useState(false);
+
+  const toggleConfirm = useCallback(
+    (show: boolean) => {
+      if (show) {
+        Keyboard.dismiss();
+        setShowConfirm(true);
+        Animated.parallel([
+          Animated.timing(slideConfirm, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(confirmOverlayOpacity, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      } else {
+        Animated.parallel([
+          Animated.timing(slideConfirm, {
+            toValue: height,
+            duration: 250,
+            useNativeDriver: true,
+          }),
+          Animated.timing(confirmOverlayOpacity, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+        ]).start(() => setShowConfirm(false));
+      }
+    },
+    [confirmOverlayOpacity, slideConfirm],
+  );
 
   const mostrarSaqueStatus = () => {
     toggleConfirm(false);
@@ -47,13 +84,13 @@ export default function SacarSaldo({
     // Não fecha o SacarSaldo, apenas volta para ele
   };
 
-  const handleDrawerClose = () => {
+  const handleDrawerClose = useCallback(() => {
     // Limpa os estados ao fechar
     setValor("");
     setShowConfirm(false);
     setSaqueStatus(false);
     onClose();
-  };
+  }, [onClose]);
 
   useEffect(() => {
     const onBackPress = () => {
@@ -78,11 +115,18 @@ export default function SacarSaldo({
       onBackPress,
     );
     return () => subscription.remove();
-  }, [visible, showConfirm, saqueStatus, onClose]);
+  }, [
+    visible,
+    showConfirm,
+    saqueStatus,
+    onClose,
+    toggleConfirm,
+    handleDrawerClose,
+  ]);
 
   useEffect(() => {
     if (visible) {
-      setIsMounted(true);
+      setTimeout(() => setIsMounted(true), 0);
       Animated.parallel([
         Animated.timing(translateX, {
           toValue: 0,
@@ -109,39 +153,7 @@ export default function SacarSaldo({
         }),
       ]).start(({ finished }) => finished && setIsMounted(false));
     }
-  }, [visible, duration]);
-
-  const toggleConfirm = (show: boolean) => {
-    if (show) {
-      Keyboard.dismiss();
-      setShowConfirm(true);
-      Animated.parallel([
-        Animated.timing(slideConfirm, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(confirmOverlayOpacity, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(slideConfirm, {
-          toValue: height,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(confirmOverlayOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start(() => setShowConfirm(false));
-    }
-  };
+  }, [visible, duration, translateX, overlayOpacity]);
 
   if (!isMounted) return null;
 
@@ -162,7 +174,10 @@ export default function SacarSaldo({
         {/* Drawer */}
         <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
           <View
-            style={styles.header}
+            style={[
+              styles.header,
+              { paddingTop: Math.max(insets.top + 12, 45) },
+            ]}
             onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
           >
             <View style={styles.headerContent}>

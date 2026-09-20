@@ -23,6 +23,7 @@ export interface CadastroMotorista {
     ear: boolean;
   } | null;
   documentos: DocumentoEnviado[];
+  documentos_faltando: string[];
   veiculos: number;
   pendencias: ("cnh" | "documentos" | "veiculo")[];
 }
@@ -68,7 +69,9 @@ export function useCadastroMotorista() {
   }, []);
 
   useEffect(() => {
-    carregar();
+    const timer = setTimeout(() => void carregar(), 0);
+
+    return () => clearTimeout(timer);
   }, [carregar]);
 
   const enviarCnh = useCallback(
@@ -92,12 +95,44 @@ export function useCadastroMotorista() {
     [carregar],
   );
 
+  const enviarDocumento = useCallback(
+    async (
+      tipo: string,
+      arquivo: { uri: string; name: string; mimeType?: string },
+    ) => {
+      setEnviando(true);
+      setErro("");
+
+      try {
+        const dados = new FormData();
+        dados.append("tipo_documento", tipo);
+        dados.append("arquivo", {
+          uri: arquivo.uri,
+          name: arquivo.name,
+          type: arquivo.mimeType ?? "application/octet-stream",
+        } as unknown as Blob);
+        await api.post("/motorista/cadastro/documentos", dados, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        await carregar();
+        return true;
+      } catch (falha) {
+        setErro(mensagemDoErro(falha, "Não foi possível enviar o documento."));
+        return false;
+      } finally {
+        setEnviando(false);
+      }
+    },
+    [carregar],
+  );
+
   return {
     cadastro,
     carregando,
     enviando,
     erro,
     enviarCnh,
+    enviarDocumento,
     recarregar: carregar,
   };
 }

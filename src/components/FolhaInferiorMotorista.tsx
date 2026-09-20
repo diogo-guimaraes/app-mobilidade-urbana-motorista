@@ -13,15 +13,14 @@ interface DriverSearchProps {
 export default function FolhaInferiorMotorista({
   onSheetChange,
 }: DriverSearchProps) {
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   // snap points do bottomsheet
-  const snapPoints = useMemo(() => ["64%", "80%"], []);
+  const snapPoints = useMemo(() => ["18%", "52%", "92%"], []);
   const sheetRef = useRef<BottomSheet>(null);
 
   // eventos
   const handleSheetChange = useCallback(
     (index: number) => {
-      console.log(user, "handleSheetChange", index);
       // ✨ CHAMANDO CALLBACK: Notifica o componente pai sobre o índice atual
       onSheetChange(index);
     },
@@ -32,13 +31,17 @@ export default function FolhaInferiorMotorista({
     <View className="flex-1 pt-12 px-4">
       <BottomSheet
         ref={sheetRef}
+        index={0}
         snapPoints={snapPoints}
         enableDynamicSizing={false}
+        enablePanDownToClose={false}
         onChange={handleSheetChange}
       >
         {/* Campo de pesquisa */}
         <BottomSheetView className="flex-1 items-center px-4">
-          <Text>escreva aqui, {user?.name}!</Text>
+          <Text maxFontSizeMultiplier={1.1} style={styles.saudacao}>
+            escreva aqui, {user?.name?.split(/\s+/)[0]}!
+          </Text>
           {/* crie aqui */}
         </BottomSheetView>
       </BottomSheet>
@@ -47,18 +50,10 @@ export default function FolhaInferiorMotorista({
 }
 
 const styles = StyleSheet.create({
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f1f5f8",
-    borderRadius: 12,
-    padding: 12,
-    width: "100%",
-  },
-  inputText: {
-    marginLeft: 8,
-    fontSize: 29,
-    fontWeight: "600",
-    color: "black",
+  saudacao: {
+    color: "#222222",
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "500",
   },
 });

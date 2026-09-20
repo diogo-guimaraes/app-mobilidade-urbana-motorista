@@ -1,5 +1,6 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Text } from "@/components/common/Texto";
 import {
   Animated,
@@ -24,8 +25,9 @@ interface props {
 }
 
 export default function MeuSaldo({ visible, onClose, duration = 200 }: props) {
-  const translateX = useRef(new Animated.Value(width)).current;
-  const overlayOpacity = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
+  const [translateX] = useState(() => new Animated.Value(width));
+  const [overlayOpacity] = useState(() => new Animated.Value(0));
   const [isMounted, setIsMounted] = useState(visible);
 
   const [sacarSaldo, setSacarSaldo] = useState(false);
@@ -64,7 +66,7 @@ export default function MeuSaldo({ visible, onClose, duration = 200 }: props) {
 
   useEffect(() => {
     if (visible) {
-      setIsMounted(true);
+      setTimeout(() => setIsMounted(true), 0);
       Animated.parallel([
         Animated.timing(translateX, {
           toValue: 0,
@@ -193,7 +195,12 @@ export default function MeuSaldo({ visible, onClose, duration = 200 }: props) {
 
         <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
           {/* HEADER */}
-          <View style={styles.header}>
+          <View
+            style={[
+              styles.header,
+              { paddingTop: Math.max(insets.top + 12, 45) },
+            ]}
+          >
             <View style={styles.headerContent}>
               <TouchableOpacity onPress={onClose}>
                 <Ionicons name="chevron-back" size={28} color="#111" />

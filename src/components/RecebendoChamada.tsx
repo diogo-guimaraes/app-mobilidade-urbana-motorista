@@ -30,15 +30,13 @@ interface RecebendoChamadaProps {
 // ==========================================================
 const PulseOverlay = () => {
   // Referências para as três ondas de pulso
-  const pulse1 = useRef(new Animated.Value(0)).current;
+  const [pulse1] = useState(() => new Animated.Value(0));
   // const pulse2 = useRef(new Animated.Value(0)).current;
   // const pulse3 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Duração mais rápida para simular a urgência da chamada
     const DURATION = 2100;
-    const DELAY = DURATION / 3.5; //se quisar aplicar
-
     // Função para criar o loop de pulso com atraso
     const createPulse = (animatedValue: Animated.Value, delay: number) => {
       // Cria um loop que sequencia: 1) Atraso, 2) Expansão (0 -> 1), 3) Reset (1 -> 0)
@@ -154,7 +152,7 @@ export default function RecebendoChamadas({
       player.remove();
     } catch {}
   };
-  const progress = useRef(new Animated.Value(1)).current;
+  const [progress] = useState(() => new Animated.Value(1));
   const closedRef = useRef(false); // evita múltiplas chamadas de fechamento
   const DURATION = 20000;
 
@@ -203,13 +201,12 @@ export default function RecebendoChamadas({
     // cleanup do effect
     return () => {
       closedRef.current = true;
-      setIsPulsing(false); // Pára o pulso ao desmontar
       clearTimeout(expiracao);
 
       silenciar(player); // para e descarrega o player
       playerRef.current = null;
     };
-  }, []);
+  }, [onRecusar, progress]);
 
   const pararSom = () => {
     silenciar(playerRef.current);

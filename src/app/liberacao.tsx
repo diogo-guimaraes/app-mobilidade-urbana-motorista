@@ -2,12 +2,15 @@ import AppLogo from "@/components/common/AppLogo";
 import ErrorBanner from "@/components/common/ErrorBanner";
 import { Text, TextInput } from "@/components/common/Texto";
 import { useAuth } from "@/context/AuthProvider";
+import { useToast } from "@/context/ToastContext";
 import {
   SituacaoCadastro,
   useCadastroMotorista,
 } from "@/hooks/useCadastroMotorista";
 import { useEspacoDoTeclado } from "@/hooks/useEspacoDoTeclado";
 import { Feather } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -25,6 +28,14 @@ import {
 } from "react-native-safe-area-context";
 
 const CATEGORIAS_CNH = ["A", "B", "AB", "C", "D", "E"];
+const DOCUMENTOS_EXIGIDOS = [
+  { tipo: "cnh", titulo: "Foto ou PDF da CNH" },
+  { tipo: "crlv", titulo: "Documento do veículo (CRLV)" },
+  { tipo: "nada_consta", titulo: "Certidão de nada consta" },
+  { tipo: "seguro_obrigatorio", titulo: "Seguro obrigatório" },
+] as const;
+const EXTENSOES_PERMITIDAS = /\.(pdf|jpe?g|png|webp|heic|heif|gif)$/i;
+const TAMANHO_MAXIMO = 10 * 1024 * 1024;
 
 const AVISO: Record<
   SituacaoCadastro,
@@ -42,7 +53,8 @@ const AVISO: Record<
   },
   em_analise: {
     titulo: "Cadastro em análise",
-    texto: "Já recebemos seus dados. Avisaremos assim que for aprovado.",
+    texto:
+      "Confira os documentos abaixo e envie os que faltam. Avisaremos assim que forem aprovados.",
     cor: "#1565C0",
   },
   reprovado: {
@@ -82,14 +94,24 @@ export default function Liberacao() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { logout } = useAuth();
+  const { mostrarToast } = useToast();
   const espacoDoTeclado = useEspacoDoTeclado();
-  const { cadastro, carregando, enviando, erro, enviarCnh, recarregar } =
-    useCadastroMotorista();
+  const {
+    cadastro,
+    carregando,
+    enviando,
+    erro,
+    enviarCnh,
+    enviarDocumento,
+    recarregar,
+  } = useCadastroMotorista();
 
   const [numero, setNumero] = useState("");
   const [categoria, setCategoria] = useState("");
   const [validade, setValidade] = useState("");
   const [ear, setEar] = useState(false);
+  const [erroArquivo, setErroArquivo] = useState("");
+  const [saindo, setSaindo] = useState(false);
 
   useEffect(() => {
     if (cadastro?.situacao === "aprovado") {
@@ -115,6 +137,73 @@ export default function Liberacao() {
       cnh_expiracao: validadeIso,
       ear,
     });
+  };
+
+  const processarArquivo = async (
+    tipo: string,
+    arquivo: { uri: string; name: string; mimeType?: string; size?: number },
+  ) => {
+    setErroArquivo("");
+    if (!EXTENSOES_PERMITIDAS.test(arquivo.name)) {
+      setErroArquivo(
+        "Selecione um PDF ou uma imagem JPG, PNG, WEBP, HEIC ou GIF.",
+      );
+      return;
+    }
+    if (arquivo.size !== undefined && arquivo.size > TAMANHO_MAXIMO) {
+      setErroArquivo("O arquivo deve ter no máximo 10 MB.");
+      return;
+    }
+    const sucesso = await enviarDocumento(tipo, arquivo);
+    if (sucesso) {
+      mostrarToast({
+        tipo: "success",
+        titulo: "Documento enviado para análise",
+      });
+    }
+  };
+
+  const selecionarDocumento = async (tipo: string) => {
+    try {
+      const escolha = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*"],
+        copyToCacheDirectory: true,
+      });
+      if (!escolha.canceled && escolha.assets[0]) {
+        await processarArquivo(tipo, escolha.assets[0]);
+      }
+    } catch {
+      setErroArquivo("Não foi possível abrir o arquivo. Tente novamente.");
+    }
+  };
+
+  const selecionarFoto = async (tipo: string) => {
+    try {
+      const escolha = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 1,
+      });
+      if (escolha.canceled || !escolha.assets[0]) return;
+      const foto = escolha.assets[0];
+      const extensao = foto.mimeType?.split("/")[1] ?? "jpg";
+      await processarArquivo(tipo, {
+        uri: foto.uri,
+        name:
+          foto.fileName && EXTENSOES_PERMITIDAS.test(foto.fileName)
+            ? foto.fileName
+            : `documento.${extensao}`,
+        mimeType: foto.mimeType,
+        size: foto.fileSize,
+      });
+    } catch {
+      setErroArquivo("Não foi possível abrir a galeria. Tente novamente.");
+    }
+  };
+
+  const sairDaConta = async () => {
+    if (saindo) return;
+    setSaindo(true);
+    await logout();
   };
 
   if (carregando) {
@@ -174,23 +263,60 @@ export default function Liberacao() {
               ))
             )}
 
-            {cadastro?.documentos.map((documento) => (
-              <View key={documento.tipo_documento} style={styles.itemLinha}>
-                <Feather
-                  name={
-                    documento.status === "aprovado" ? "check-circle" : "clock"
-                  }
-                  size={18}
-                  color={
-                    documento.status === "aprovado" ? "#17A673" : "#E65100"
-                  }
-                />
-                <Text style={styles.itemTexto}>
-                  {documento.tipo_documento} · {documento.status}
-                  {documento.observacao ? ` — ${documento.observacao}` : ""}
-                </Text>
-              </View>
-            ))}
+            <Text style={styles.secao}>Documentos para análise</Text>
+            <Text style={styles.ajudaDocumento}>
+              Envie PDF ou imagem (JPG, PNG, WEBP, HEIC ou GIF), até 10 MB por
+              arquivo.
+            </Text>
+            {DOCUMENTOS_EXIGIDOS.map(({ tipo, titulo }) => {
+              const documento = cadastro?.documentos.find(
+                (item) => item.tipo_documento === tipo,
+              );
+              const status = documento?.status ?? "não enviado";
+              return (
+                <View key={tipo} style={styles.documentoCard}>
+                  <View style={styles.itemLinha}>
+                    <Feather
+                      name={
+                        status === "aprovado" ? "check-circle" : "file-text"
+                      }
+                      size={18}
+                      color={status === "aprovado" ? "#17A673" : "#E65100"}
+                    />
+                    <Text style={styles.itemTexto}>
+                      {titulo} · {status.replaceAll("_", " ")}
+                    </Text>
+                  </View>
+                  {documento?.observacao ? (
+                    <Text style={styles.alerta}>{documento.observacao}</Text>
+                  ) : null}
+                  {status !== "aprovado" ? (
+                    <View style={styles.acoesDocumento}>
+                      <TouchableOpacity
+                        style={styles.botaoDocumento}
+                        onPress={() => void selecionarFoto(tipo)}
+                        disabled={enviando || saindo}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.botaoDocumentoTexto}>
+                          Escolher foto
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.botaoDocumento}
+                        onPress={() => void selecionarDocumento(tipo)}
+                        disabled={enviando || saindo}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.botaoDocumentoTexto}>
+                          {enviando ? "Enviando..." : "Escolher arquivo"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
 
             {faltaCnh ? (
               <>
@@ -272,9 +398,14 @@ export default function Liberacao() {
               </>
             ) : null}
 
+            {erroArquivo ? <ErrorBanner message={erroArquivo} /> : null}
             {erro.length > 0 ? <ErrorBanner message={erro} /> : null}
 
-            <TouchableOpacity style={styles.sair} onPress={logout}>
+            <TouchableOpacity
+              style={styles.sair}
+              onPress={() => void sairDaConta()}
+              disabled={saindo}
+            >
               <Text style={styles.sairTexto}>Sair da conta</Text>
             </TouchableOpacity>
           </View>
@@ -354,6 +485,23 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   itemTexto: { flex: 1, fontSize: 15, color: "#333" },
+  ajudaDocumento: { fontSize: 13, color: "#666", marginBottom: 12 },
+  documentoCard: {
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+  },
+  acoesDocumento: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  botaoDocumento: {
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "#FFF3E0",
+    alignSelf: "flex-start",
+  },
+  botaoDocumentoTexto: { fontSize: 14, fontWeight: "600", color: "#B34300" },
   rotulo: { fontSize: 13, color: "#666", marginBottom: 10 },
   inputWrapper: {
     flexDirection: "row",

@@ -66,7 +66,7 @@ export default function MenuInferiorMotorista({
         buscandoCorrida={disponivel}
       />
 
-      <SafeAreaView style={styles.bottomMenuWrapper}>
+      <SafeAreaView edges={["bottom"]} style={styles.bottomMenuWrapper}>
         <View style={styles.bottomMenu}>
           {/* 🔹 Ícone lateral esquerdo (Config/Desconectar) */}
           <TouchableOpacity
@@ -74,7 +74,7 @@ export default function MenuInferiorMotorista({
             onPress={MostrarPreferencias}
             activeOpacity={0.8}
           >
-            <Ionicons name="options-outline" size={40} color="#000" />
+            <Ionicons name="options-outline" size={28} color="#000" />
             {/* 🔴 Pontinho vermelho de status */}
             <View
               style={[
@@ -106,7 +106,7 @@ export default function MenuInferiorMotorista({
             onPress={setSolicitacoesCorrida}
             activeOpacity={0.8}
           >
-            <Ionicons name="document-text-outline" size={40} color="#000" />
+            <Ionicons name="document-text-outline" size={28} color="#000" />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -130,42 +130,44 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   iconButton: {
     position: "relative",
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
   },
   redDot: {
     position: "absolute",
-    top: 6,
-    left: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 3,
+    left: 5,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: "red",
   },
   connectButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 28,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    width: "70%",
+    flex: 1,
+    minWidth: 0,
+    marginHorizontal: 10,
     alignSelf: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 3,
     elevation: 3,
-    minHeight: 56,
+    minHeight: 48,
   },
   connectTextLarge: {
     color: "black",
-    fontSize: 30,
+    fontSize: 20,
     fontWeight: "600",
     textAlign: "center",
   },

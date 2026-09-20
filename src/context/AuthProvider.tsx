@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -99,6 +100,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<Usuario | null>(null);
+  const logoutEmAndamento = useRef(false);
 
   const [loading, setLoading] = useState(true);
 
@@ -190,26 +192,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Limpa a sessão local sem chamar o backend (usado quando o token já é
   // sabidamente inválido, ex: resposta 401 de qualquer requisição).
   const limparSessaoLocal = async () => {
-    setUser(null);
-
-    await SecureStore.deleteItemAsync("user");
-
     await SecureStore.deleteItemAsync("token");
+    await SecureStore.deleteItemAsync("user");
+    setUser(null);
   };
 
   const logout = async () => {
+    if (logoutEmAndamento.current) return;
+    logoutEmAndamento.current = true;
     try {
-      // invalida o token no backend antes de limpar localmente
-      await api.post("/auth/logout");
-    } catch (error) {
-      console.error("Erro ao invalidar token no backend:", error);
+      const token = await SecureStore.getItemAsync("token");
+      if (token) await api.post("/auth/logout");
+    } catch {
+      // Token expirado ou rede indisponível não impedem a saída local.
     } finally {
-      await limparSessaoLocal();
+      try {
+        await limparSessaoLocal();
+      } finally {
+        router.replace("/login");
+        logoutEmAndamento.current = false;
+      }
     }
   };
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
+      if (logoutEmAndamento.current) return;
       // token já é inválido (401): só limpa localmente, não chama /auth/logout
       limparSessaoLocal();
 
@@ -265,14 +273,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       await SecureStore.setItemAsync("token", token);
     } catch (error: any) {
-      if (__DEV__) {
-        console.error(
-          "Erro ao registrar:",
-          error?.response?.status,
-          error?.response?.data ?? error?.message,
-        );
+      if (__DEV__ && error?.response?.status !== 422) {
+        console.warn("Falha inesperada no cadastro:", error?.response?.status);
       }
-
       throw error;
     } finally {
       setLoading(false);

@@ -41,6 +41,7 @@ const ajustarFonte = <T,>(style: T): T => {
 
 export type Text = TextDoRN;
 
+// eslint-disable-next-line @typescript-eslint/no-redeclare
 export const Text = forwardRef<TextDoRN, TextProps>(
   ({ maxFontSizeMultiplier, style, ...resto }, ref) => (
     <TextDoRN
@@ -56,6 +57,7 @@ Text.displayName = "Text";
 
 export type TextInput = TextInputDoRN;
 
+// eslint-disable-next-line @typescript-eslint/no-redeclare
 export const TextInput = forwardRef<TextInputDoRN, TextInputProps>(
   ({ maxFontSizeMultiplier, style, ...resto }, ref) => (
     <TextInputDoRN

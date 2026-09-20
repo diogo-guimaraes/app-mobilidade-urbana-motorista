@@ -52,7 +52,7 @@ const GanhoDiario = ({ visible, setVisible }: GanhoDiarioProps) => {
 
   useEffect(() => {
     if (visible) {
-      setModalRenderizado(true);
+      setTimeout(() => setModalRenderizado(true), 0);
     } else {
       closeAnimation(() => setModalRenderizado(false));
     }
@@ -102,7 +102,7 @@ const GanhoDiario = ({ visible, setVisible }: GanhoDiarioProps) => {
           <TouchableOpacity onPress={handleEyePress} activeOpacity={0.7}>
             <Ionicons
               name={mostrarValor ? "eye" : "eye-off"}
-              size={22}
+              size={19}
               color="#fff"
             />
           </TouchableOpacity>
@@ -130,7 +130,7 @@ const GanhoDiario = ({ visible, setVisible }: GanhoDiarioProps) => {
           >
             <Ionicons
               name={visible ? "chevron-up" : "chevron-down"}
-              size={20}
+              size={18}
               color="#fff"
             />
           </TouchableOpacity>
@@ -298,9 +298,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "black",
-    borderRadius: 25,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     elevation: 3,
     shadowColor: "#000",
     shadowOpacity: 0.2,
@@ -311,18 +311,18 @@ const styles = StyleSheet.create({
     width: 1,
     height: 16,
     backgroundColor: "rgba(255,255,255,0.3)",
-    marginHorizontal: 8,
+    marginHorizontal: 6,
   },
   valorText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
   },
   moeda: {
     color: "#FFD600",
   },
   dropdownButton: {
-    marginLeft: 6,
+    marginLeft: 5,
   },
   modalWrapper: {
     position: "absolute",

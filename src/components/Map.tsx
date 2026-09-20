@@ -1,12 +1,20 @@
-// components/Map.tsx
 import { MaterialIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Text } from "@/components/common/Texto";
-import { Alert, StyleSheet, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  AppState,
+  Linking,
+  Platform,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import MapView, {
   Marker,
   Polyline,
+  PROVIDER_GOOGLE,
   Region,
   UserLocationChangeEvent,
 } from "react-native-maps";
@@ -53,10 +61,38 @@ export default function Map({
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [hasInitialLocation, setHasInitialLocation] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapaTentativa, setMapaTentativa] = useState(0);
+  const [mapaDemorando, setMapaDemorando] = useState(false);
+  const temporizadorMapa = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [tentativaLocalizacao, setTentativaLocalizacao] = useState(0);
+
+  const limparTemporizadorMapa = useCallback(() => {
+    if (temporizadorMapa.current !== null)
+      clearTimeout(temporizadorMapa.current);
+    temporizadorMapa.current = null;
+  }, []);
+
+  const mapaPronto = useCallback(() => {
+    setMapReady(true);
+    if (Platform.OS === "android") {
+      limparTemporizadorMapa();
+      temporizadorMapa.current = setTimeout(
+        () => setMapaDemorando(true),
+        12_000,
+      );
+    }
+  }, [limparTemporizadorMapa]);
+
+  const mapaCarregado = useCallback(() => {
+    limparTemporizadorMapa();
+    setMapaDemorando(false);
+  }, [limparTemporizadorMapa]);
+
+  useEffect(() => () => limparTemporizadorMapa(), [limparTemporizadorMapa]);
 
   // 🔹 guarda a região original do usuário para aplicar offsets conforme o BottomSheet
   const userInitialRegion = useRef<Region | null>(null);
-  const [mapAdjusted, setMapAdjusted] = useState(false);
 
   // com rota na tela, o mapa deixa de seguir a região manual e passa a
   // mostrar o trajeto inteiro
@@ -66,7 +102,7 @@ export default function Map({
       : "";
 
   useEffect(() => {
-    if (chaveRota === "" || mapRef.current === null) return;
+    if (chaveRota === "" || !mapReady || mapRef.current === null) return;
 
     mapRef.current.fitToCoordinates(rota, {
       edgePadding: {
@@ -78,32 +114,41 @@ export default function Map({
       animated: true,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveRota, alturaFolha]);
+  }, [chaveRota, alturaFolha, mapReady]);
 
   // Solicitar permissão de localização
   useEffect(() => {
+    let montado = true;
+
     (async () => {
       try {
         setIsLoading(true);
-        console.log("Solicitando permissão de localização...");
 
-        let { status } = await Location.requestForegroundPermissionsAsync();
+        let { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== "granted") {
+          ({ status } = await Location.requestForegroundPermissionsAsync());
+        }
+
+        if (!montado) return;
 
         if (status === "granted") {
           setLocationPermission(true);
-          console.log("Permissão concedida, obtendo localização...");
 
           // Obter localização atual
-          let location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
+          const recente = await Location.getLastKnownPositionAsync({
+            maxAge: 60_000,
+            requiredAccuracy: 500,
           });
+          const location =
+            recente ??
+            (await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            }));
 
-          console.log("Localização obtida:", location.coords);
+          if (!montado) return;
 
-          // 🔹 Aplicando a mesma lógica de offset do home.tsx
-          const offsetLatitude = 0.0064;
           const userRegion: Region = {
-            latitude: location.coords.latitude - offsetLatitude,
+            latitude: location.coords.latitude,
             longitude: location.coords.longitude,
             latitudeDelta: 0.01,
             longitudeDelta: 0.01,
@@ -129,7 +174,6 @@ export default function Map({
             mapRef.current.animateToRegion(userRegion, 1000);
           }
         } else {
-          console.log("Permissão de localização negada");
           setLocationPermission(false);
           Alert.alert(
             "Localização Necessária",
@@ -146,11 +190,25 @@ export default function Map({
           [{ text: "OK" }],
         );
       } finally {
-        setIsLoading(false);
-        console.log("Loading finalizado");
+        if (montado) setIsLoading(false);
       }
     })();
-  }, [onUserLocationFound]); // Corrigido: incluída a dependência
+
+    return () => {
+      montado = false;
+    };
+  }, [onUserLocationFound, tentativaLocalizacao]);
+
+  useEffect(() => {
+    const assinatura = AppState.addEventListener("change", async (estado) => {
+      if (estado !== "active") return;
+      const permissao = await Location.getForegroundPermissionsAsync();
+      if (permissao.status === "granted" && !locationPermission) {
+        setTentativaLocalizacao((atual) => atual + 1);
+      }
+    });
+    return () => assinatura.remove();
+  }, [locationPermission]);
 
   // Atualizar localização do usuário quando ele se move
   const handleUserLocationChange = (event: UserLocationChangeEvent) => {
@@ -163,20 +221,14 @@ export default function Map({
         longitudeDelta: 0.01,
       };
       setUserLocation(newUserRegion);
+      userInitialRegion.current = newUserRegion;
+      if (rota.length === 0) onUserLocationFound?.(newUserRegion);
     }
   };
 
   // Centralizar no usuário
   const centerOnUser = async () => {
-    console.log("➡️ centerOnUser chamado!");
-    if (userInitialRegion.current && mapRef.current) {
-      const offsetLatitude = 0.0064;
-      const regionWithOffset = {
-        ...userInitialRegion.current,
-        latitude: userInitialRegion.current.latitude - offsetLatitude,
-      };
-      mapRef.current.animateToRegion(regionWithOffset, 1000);
-    } else if (userLocation && mapRef.current) {
+    if (userLocation && mapRef.current) {
       mapRef.current.animateToRegion(userLocation, 1000);
     } else {
       // Tentar obter localização novamente
@@ -186,9 +238,8 @@ export default function Map({
           accuracy: Location.Accuracy.Balanced,
         });
 
-        const offsetLatitude = 0.0064;
         const newUserRegion = {
-          latitude: location.coords.latitude - offsetLatitude,
+          latitude: location.coords.latitude,
           longitude: location.coords.longitude,
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
@@ -209,42 +260,25 @@ export default function Map({
 
   // 👇 NOVO useEffect: reage à mudança de estado do BottomSheet
   useEffect(() => {
-    if (bottomSheetIndex === undefined || !userInitialRegion.current) return;
+    if (
+      bottomSheetIndex === undefined ||
+      !userInitialRegion.current ||
+      rota.length > 1
+    )
+      return;
 
-    console.log("🗺️ BottomSheet mudou para índice:", bottomSheetIndex);
+    const fracaoOcupada = [0.18, 0.52, 0.92][bottomSheetIndex] ?? 0.18;
+    const base = userInitialRegion.current;
+    const latitudeDelta = base.latitudeDelta ?? 0.01;
+    const novaRegiao: Region = {
+      ...base,
+      latitude: base.latitude - (latitudeDelta * fracaoOcupada) / 2,
+      latitudeDelta,
+      longitudeDelta: base.longitudeDelta ?? 0.01,
+    };
 
-    // Índice 1 corresponde ao snap point superior ("80%")
-    if (bottomSheetIndex) {
-      const largerOffset = 0.045;
-      const zoomedLatitudeDelta = 0.055;
-      const zoomedLongitudeDelta = 0.055;
-
-      const newRegion: Region = {
-        ...userInitialRegion.current,
-        latitude: userInitialRegion.current.latitude - largerOffset,
-        latitudeDelta: zoomedLatitudeDelta,
-        longitudeDelta: zoomedLongitudeDelta,
-      };
-
-      if (mapRef.current) {
-        mapRef.current.animateToRegion(newRegion, 1000);
-      }
-      setMapAdjusted(true);
-    } else if (bottomSheetIndex === 0 && mapAdjusted) {
-      const initialOffset = 0.0064;
-      const initialRegion: Region = {
-        ...userInitialRegion.current,
-        latitude: userInitialRegion.current.latitude - initialOffset,
-        latitudeDelta: userInitialRegion.current.latitudeDelta ?? 0.01,
-        longitudeDelta: userInitialRegion.current.longitudeDelta ?? 0.01,
-      };
-
-      if (mapRef.current) {
-        mapRef.current.animateToRegion(initialRegion, 1000);
-      }
-      setMapAdjusted(false);
-    }
-  }, [bottomSheetIndex, mapAdjusted]);
+    mapRef.current?.animateToRegion(novaRegiao, 450);
+  }, [bottomSheetIndex, rota.length, mapReady]);
 
   // Se ainda está carregando, mostrar loading
   if (isLoading) {
@@ -271,12 +305,15 @@ export default function Map({
         <TouchableOpacity
           style={styles.retryButton}
           onPress={() => {
-            setIsLoading(true);
-            setLocationPermission(false);
-            // Recarregar o componente
-            setTimeout(() => {
-              setIsLoading(false);
-            }, 100);
+            void Location.requestForegroundPermissionsAsync().then(
+              ({ status }) => {
+                if (status === "granted") {
+                  setTentativaLocalizacao((atual) => atual + 1);
+                } else {
+                  void Linking.openSettings();
+                }
+              },
+            );
           }}
         >
           <Text style={styles.retryButtonText}>Tentar Novamente</Text>
@@ -302,10 +339,12 @@ export default function Map({
   }
 
   return (
-    <View style={StyleSheet.absoluteFill}>
+    <View style={[StyleSheet.absoluteFill, styles.mapContainer]}>
       <MapView
+        key={mapaTentativa}
         ref={mapRef}
         style={StyleSheet.absoluteFill}
+        provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
         region={
           rota.length > 0 ? undefined : region || userLocation || emptyRegion
         }
@@ -315,12 +354,17 @@ export default function Map({
         onUserLocationChange={handleUserLocationChange}
         followsUserLocation={false}
         mapType="standard"
+        userInterfaceStyle="light"
+        onMapReady={mapaPronto}
+        onMapLoaded={mapaCarregado}
       >
         {rota.length > 1 && (
           <Polyline
+            key={chaveRota}
             coordinates={rota}
             strokeWidth={5}
             strokeColor={alvoEhDestino ? "#2F6BFF" : "#17A673"}
+            zIndex={10}
           />
         )}
 
@@ -332,6 +376,26 @@ export default function Map({
           />
         )}
       </MapView>
+
+      {mapaDemorando && (
+        <View accessibilityRole="alert" style={styles.mapLoadError}>
+          <Text style={styles.mapLoadErrorTitle}>O mapa não carregou</Text>
+          <Text style={styles.mapLoadErrorText}>
+            Confira sua internet e atualize o Google Play Services.
+          </Text>
+          <TouchableOpacity
+            style={styles.mapLoadRetry}
+            onPress={() => {
+              limparTemporizadorMapa();
+              setMapReady(false);
+              setMapaDemorando(false);
+              setMapaTentativa((atual) => atual + 1);
+            }}
+          >
+            <Text style={styles.mapLoadRetryText}>Tentar novamente</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Botão para centralizar no usuário */}
       {!isGanhoModalVisible && (
@@ -352,6 +416,36 @@ export default function Map({
 }
 
 const styles = StyleSheet.create({
+  mapContainer: {
+    backgroundColor: "#FFFFFF",
+  },
+  mapLoadError: {
+    position: "absolute",
+    top: 110,
+    left: 24,
+    right: 24,
+    zIndex: 30,
+    alignItems: "center",
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    elevation: 8,
+  },
+  mapLoadErrorTitle: { color: "#202124", fontSize: 16, fontWeight: "700" },
+  mapLoadErrorText: {
+    marginTop: 5,
+    color: "#5F6368",
+    fontSize: 13,
+    textAlign: "center",
+  },
+  mapLoadRetry: {
+    marginTop: 12,
+    borderRadius: 18,
+    backgroundColor: "#111",
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+  },
+  mapLoadRetryText: { color: "#FFF", fontSize: 14, fontWeight: "600" },
   centerButton: {
     position: "absolute",
     bottom: 120,
@@ -371,12 +465,12 @@ const styles = StyleSheet.create({
   loadingContainer: {
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f8f8f8",
+    backgroundColor: "#FFFFFF",
   },
   errorContainer: {
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f8f8f8",
+    backgroundColor: "#FFFFFF",
     padding: 20,
   },
   loadingText: {
