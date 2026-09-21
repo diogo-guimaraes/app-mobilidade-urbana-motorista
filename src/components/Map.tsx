@@ -84,6 +84,10 @@ export default function Map({
     }
   }, [limparTemporizadorMapa]);
 
+  // onMapLoaded só existe no Android e não dispara de forma confiável em
+  // todo aparelho: quando falha, o aviso de "mapa não carregou" aparecia com
+  // o mapa desenhado na tela. Região assentada e posição do usuário também
+  // provam que a camada está viva.
   const mapaCarregado = useCallback(() => {
     limparTemporizadorMapa();
     setMapaDemorando(false);
@@ -348,10 +352,16 @@ export default function Map({
         region={
           rota.length > 0 ? undefined : region || userLocation || emptyRegion
         }
-        onRegionChangeComplete={onRegionChange}
+        onRegionChangeComplete={(regiao) => {
+          mapaCarregado();
+          onRegionChange(regiao);
+        }}
         showsUserLocation={true}
         showsMyLocationButton={false}
-        onUserLocationChange={handleUserLocationChange}
+        onUserLocationChange={(evento) => {
+          mapaCarregado();
+          handleUserLocationChange(evento);
+        }}
         followsUserLocation={false}
         mapType="standard"
         userInterfaceStyle="light"
