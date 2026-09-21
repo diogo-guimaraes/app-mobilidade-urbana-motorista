@@ -46,15 +46,26 @@ export default function ContadorEspera({
     segundosDesdeResumo,
     perspectiva,
   );
-  const cor =
+  // aviso de cobrança: a família amarela inteira, com a severidade indo do
+  // tom mais claro (tolerância, ainda gratuita) ao mais fechado (limite
+  // atingido). Amarelo puro no texto não tem contraste suficiente sobre
+  // fundo claro, por isso o texto usa âmbar escuro.
+  const paleta =
     contador.fase === "tolerancia"
-      ? "#1565C0"
+      ? { frente: "#B45309", fundo: "#FFFBEB", borda: "#FCD34D" }
       : contador.fase === "limite"
-        ? "#B71C1C"
-        : "#E65100";
+        ? { frente: "#92400E", fundo: "#FDE68A", borda: "#D97706" }
+        : { frente: "#B45309", fundo: "#FEF3C7", borda: "#F59E0B" };
+
+  const cor = paleta.frente;
 
   return (
-    <View style={[styles.container, { borderColor: cor }]}>
+    <View
+      style={[
+        styles.container,
+        { borderColor: paleta.borda, backgroundColor: paleta.fundo },
+      ]}
+    >
       <View style={styles.topo}>
         <Ionicons name="timer-outline" size={21} color={cor} />
         <View style={styles.textos}>
