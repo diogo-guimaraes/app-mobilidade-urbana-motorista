@@ -1,6 +1,11 @@
 import { api } from "@/Services/api";
 import { useToast } from "@/context/ToastContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
+
+const TEMPO_LEMBRETE_MS = 12 * 60 * 60 * 1000;
+const chaveLembrete = (corridaId: number) =>
+  `avaliacao_motorista_adiada:${corridaId}`;
 
 export interface CorridaParaAvaliar {
   id: number;
@@ -23,9 +28,19 @@ export function useAvaliacaoPendente(recarregarQuando: unknown) {
         avaliando_como?: string | null;
       }>("/corrida-para-avaliar");
 
-      setCorrida(
-        data?.avaliando_como === "motorista" ? (data?.corrida ?? null) : null,
+      const pendente =
+        data?.avaliando_como === "motorista" ? (data?.corrida ?? null) : null;
+
+      if (pendente === null) {
+        setCorrida(null);
+        return;
+      }
+
+      const adiadaAte = Number(
+        await AsyncStorage.getItem(chaveLembrete(pendente.id)),
       );
+
+      setCorrida(adiadaAte > Date.now() ? null : pendente);
     } catch {
       // sem avaliação pendente é o caso normal
     }
@@ -50,6 +65,8 @@ export function useAvaliacaoPendente(recarregarQuando: unknown) {
           comentario,
         });
 
+        await AsyncStorage.removeItem(chaveLembrete(corrida.id));
+
         setCorrida(null);
         mostrarToast({
           tipo: "success",
@@ -72,7 +89,16 @@ export function useAvaliacaoPendente(recarregarQuando: unknown) {
     [corrida, mostrarToast],
   );
 
-  const dispensar = useCallback(() => setCorrida(null), []);
+  const dispensar = useCallback(() => {
+    if (corrida !== null) {
+      void AsyncStorage.setItem(
+        chaveLembrete(corrida.id),
+        String(Date.now() + TEMPO_LEMBRETE_MS),
+      );
+    }
+
+    setCorrida(null);
+  }, [corrida]);
 
   return { corrida, enviando, avaliar, dispensar };
 }

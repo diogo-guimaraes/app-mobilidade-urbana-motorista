@@ -37,7 +37,7 @@ export function useHistoricoCorridas(ativo: boolean) {
 
       try {
         const { data } = await api.get<PaginaCorridas>("/corridas", {
-          params: { page: pagina, per_page: 20 },
+          params: { page: pagina, per_page: 50 },
         });
         const novosItens = (data?.data ?? []).map((corrida) =>
           paraItemHistorico(corrida, "motorista"),
