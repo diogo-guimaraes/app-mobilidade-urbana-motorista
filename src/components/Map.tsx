@@ -9,6 +9,7 @@ import {
   Platform,
   StyleSheet,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import MapView, {
@@ -18,6 +19,12 @@ import MapView, {
   Region,
   UserLocationChangeEvent,
 } from "react-native-maps";
+import Animated, {
+  Extrapolation,
+  interpolate,
+  type SharedValue,
+  useAnimatedStyle,
+} from "react-native-reanimated";
 
 export interface Coordenada {
   latitude: number;
@@ -29,6 +36,7 @@ interface MapProps {
   onRegionChange: (region: Region) => void;
   onUserLocationFound?: (region: Region) => void;
   bottomSheetIndex?: number; // 👈 nova prop
+  indiceFolhaAnimado?: SharedValue<number>;
   isGanhoModalVisible?: boolean;
   rota?: Coordenada[];
   alvo?: Coordenada | null;
@@ -50,12 +58,14 @@ export default function Map({
   onRegionChange,
   onUserLocationFound,
   bottomSheetIndex, // 👈 recebendo o valor
+  indiceFolhaAnimado,
   isGanhoModalVisible,
   rota = [],
   alvo = null,
   alvoEhDestino = false,
   alturaFolha = 0,
 }: MapProps) {
+  const { height: alturaTela } = useWindowDimensions();
   const mapRef = useRef<MapView>(null);
   const [userLocation, setUserLocation] = useState<Region | null>(null);
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
@@ -66,6 +76,36 @@ export default function Map({
   const [mapaDemorando, setMapaDemorando] = useState(false);
   const temporizadorMapa = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tentativaLocalizacao, setTentativaLocalizacao] = useState(0);
+
+  const estiloPosicaoCentralizar = useAnimatedStyle(() => {
+    const indice = indiceFolhaAnimado?.value ?? bottomSheetIndex ?? 0;
+    const folgaDaFolha = interpolate(
+      indice,
+      [0, 1, 2],
+      [16, 40, 40],
+      Extrapolation.CLAMP,
+    );
+    const alturaOcupada =
+      alturaFolha > 0
+        ? alturaFolha
+        : interpolate(
+            indice,
+            [0, 1, 2],
+            [alturaTela * 0.18, alturaTela * 0.52, alturaTela * 0.92],
+            Extrapolation.CLAMP,
+          );
+
+    return {
+      bottom: Math.min(
+        alturaOcupada + (alturaFolha > 0 ? 16 : folgaDaFolha),
+        alturaTela - 64,
+      ),
+      opacity:
+        alturaFolha > 0
+          ? 1
+          : interpolate(indice, [0, 1.7, 2], [1, 1, 0], Extrapolation.CLAMP),
+    };
+  }, [alturaFolha, alturaTela, bottomSheetIndex, indiceFolhaAnimado]);
 
   const limparTemporizadorMapa = useCallback(() => {
     if (temporizadorMapa.current !== null)
@@ -226,7 +266,6 @@ export default function Map({
       };
       setUserLocation(newUserRegion);
       userInitialRegion.current = newUserRegion;
-      if (rota.length === 0) onUserLocationFound?.(newUserRegion);
     }
   };
 
@@ -408,18 +447,24 @@ export default function Map({
       )}
 
       {/* Botão para centralizar no usuário */}
-      {!isGanhoModalVisible && (
-        <TouchableOpacity
-          className="absolute top-32 bottom-32 right-2 rounded-full bg-white w-12 h-12 items-center justify-center z-20"
-          onPress={centerOnUser}
-          disabled={isLoading}
+      {!isGanhoModalVisible && (alturaFolha > 0 || bottomSheetIndex !== 2) && (
+        <Animated.View
+          style={[styles.centerButtonContainer, estiloPosicaoCentralizar]}
         >
-          <MaterialIcons
-            name="my-location"
-            size={24}
-            color={isLoading ? "#ccc" : "#007AFF"}
-          />
-        </TouchableOpacity>
+          <TouchableOpacity
+            accessibilityLabel="Centralizar na minha localização"
+            accessibilityRole="button"
+            style={styles.centerButton}
+            onPress={centerOnUser}
+            disabled={isLoading}
+          >
+            <MaterialIcons
+              name="my-location"
+              size={24}
+              color={isLoading ? "#ccc" : "#007AFF"}
+            />
+          </TouchableOpacity>
+        </Animated.View>
       )}
     </View>
   );
@@ -456,14 +501,16 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   mapLoadRetryText: { color: "#FFF", fontSize: 14, fontWeight: "600" },
-  centerButton: {
+  centerButtonContainer: {
     position: "absolute",
-    bottom: 120,
     right: 16,
+    zIndex: 20,
+  },
+  centerButton: {
     backgroundColor: "white",
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",

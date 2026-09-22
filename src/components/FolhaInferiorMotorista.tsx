@@ -3,15 +3,18 @@ import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import React, { useCallback, useMemo, useRef } from "react";
 import { Text } from "@/components/common/Texto";
 import { StyleSheet, View } from "react-native";
+import type { SharedValue } from "react-native-reanimated";
 
 // 🔹 Definição das props que o componente recebe
 interface DriverSearchProps {
   // ✨ NOVO: Callback para notificar o componente pai (Home) sobre a mudança de estado
   onSheetChange: (index: number) => void;
+  indiceAnimado: SharedValue<number>;
 }
 
 export default function FolhaInferiorMotorista({
   onSheetChange,
+  indiceAnimado,
 }: DriverSearchProps) {
   const { user } = useAuth();
   // snap points do bottomsheet
@@ -36,6 +39,7 @@ export default function FolhaInferiorMotorista({
         enableDynamicSizing={false}
         enablePanDownToClose={false}
         onChange={handleSheetChange}
+        animatedIndex={indiceAnimado}
       >
         {/* Campo de pesquisa */}
         <BottomSheetView className="flex-1 items-center px-4">

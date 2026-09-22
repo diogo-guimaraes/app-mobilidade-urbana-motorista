@@ -28,6 +28,7 @@ import {
   useColorScheme,
 } from "react-native";
 import { Region } from "react-native-maps";
+import { useSharedValue } from "react-native-reanimated";
 
 // altura aproximada da folha de corrida, pra rota não ser enquadrada atrás dela
 const ALTURA_FOLHA_CORRIDA = 330;
@@ -78,6 +79,7 @@ export default function Home() {
 
   // ✨ NOVO: Estado para armazenar o índice do BottomSheet
   const [bottomSheetIndex, setBottomSheetIndex] = useState<number>(0);
+  const bottomSheetAnimatedIndex = useSharedValue(0);
 
   // ✨ NOVO: Estado do modal de ganhos foi elevado para cá
   const [ganhoModalVisivel, setGanhoModalVisivel] = useState(false);
@@ -125,8 +127,6 @@ export default function Home() {
   }, [user, authLoading, router]);
 
   const handleUserLocationFound = useCallback((userRegion: Region) => {
-    console.log("handleUserLocationFound teste:");
-
     userInitialRegion.current = {
       ...userRegion,
       latitudeDelta: 0.01,
@@ -174,6 +174,7 @@ export default function Home() {
         onRegionChange={setRegion}
         onUserLocationFound={handleUserLocationFound}
         bottomSheetIndex={bottomSheetIndex}
+        indiceFolhaAnimado={bottomSheetAnimatedIndex}
         isGanhoModalVisible={ganhoModalVisivel}
         rota={rotaDaCorrida}
         alvo={alvoDaCorrida}
@@ -219,6 +220,7 @@ export default function Home() {
 
       {oferta !== null && corrida === null && (
         <RecebendoChamada
+          key={oferta.corrida_id}
           valor={oferta.valor_motorista}
           distanciaAteOrigem={oferta.distancia_ate_origem_km}
           distanciaDaCorrida={oferta.distancia_corrida_km}
@@ -235,6 +237,7 @@ export default function Home() {
       <GanhoDiario
         visible={ganhoModalVisivel}
         setVisible={setGanhoModalVisivel}
+        corridaAtivaId={corrida?.id ?? null}
       />
       <TopMenu onMenuPress={handleMenuOpen} />
 
@@ -247,7 +250,14 @@ export default function Home() {
       )}
 
       {/* Side Menu - zIndex menor */}
-      <SideMenu visible={menuVisible} onClose={closeMenu} drawerWidth={280} />
+      <SideMenu
+        visible={menuVisible}
+        onClose={closeMenu}
+        drawerWidth={280}
+        disponivel={disponivel}
+        emCorrida={corrida !== null}
+        onAlternarDisponibilidade={alternarDisponibilidade}
+      />
 
       {/* FolhaInferior */}
       {oferta === null && corrida === null && (
@@ -261,6 +271,7 @@ export default function Home() {
 
           <FolhaInferiorMotorista
             onSheetChange={onChangeBottomSheetMotorista}
+            indiceAnimado={bottomSheetAnimatedIndex}
           />
 
           <SolicitarCorrida
