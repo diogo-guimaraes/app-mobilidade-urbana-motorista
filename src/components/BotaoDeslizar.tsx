@@ -1,6 +1,6 @@
 import { Text } from "@/components/common/Texto";
 import { Feather } from "@expo/vector-icons";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   LayoutChangeEvent,
@@ -26,14 +26,17 @@ export default function BotaoDeslizar({
   desabilitado = false,
 }: props) {
   const [largura, setLargura] = useState(0);
-  const deslocamento = useRef(new Animated.Value(0)).current;
+  const [deslocamento] = useState(() => new Animated.Value(0));
   const confirmado = useRef(false);
 
   // o curso é medido a cada render; o PanResponder lê pela ref pra não
   // ficar preso ao valor do primeiro layout
   const cursoRef = useRef(0);
+  const curso = Math.max(largura - TAMANHO_ALCA - MARGEM * 2, 0);
 
-  cursoRef.current = Math.max(largura - TAMANHO_ALCA - MARGEM * 2, 0);
+  useEffect(() => {
+    cursoRef.current = curso;
+  }, [curso]);
 
   const voltar = () => {
     Animated.spring(deslocamento, {
@@ -46,9 +49,13 @@ export default function BotaoDeslizar({
   // mantém o callback atual sem recriar o PanResponder
   const onConfirmarRef = useRef(onConfirmar);
 
-  onConfirmarRef.current = onConfirmar;
+  useEffect(() => {
+    onConfirmarRef.current = onConfirmar;
+  }, [onConfirmar]);
 
-  const responder = useRef(
+  // O responder só lê as refs quando o usuário inicia um gesto.
+  // eslint-disable-next-line react-hooks/refs
+  const [responder] = useState(() =>
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gesto) => Math.abs(gesto.dx) > 4,
       onPanResponderMove: (_, gesto) => {
@@ -85,13 +92,13 @@ export default function BotaoDeslizar({
       },
       onPanResponderTerminate: voltar,
     }),
-  ).current;
+  );
 
   const medir = (evento: LayoutChangeEvent) =>
     setLargura(evento.nativeEvent.layout.width);
 
   const opacidadeRotulo = deslocamento.interpolate({
-    inputRange: [0, Math.max(cursoRef.current, 1)],
+    inputRange: [0, Math.max(curso, 1)],
     outputRange: [1, 0],
     extrapolate: "clamp",
   });

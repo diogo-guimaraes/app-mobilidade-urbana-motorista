@@ -24,21 +24,37 @@ interface RecebendoChamadaProps {
   corridasPassageiro?: number;
 }
 
+const DURACAO_OFERTA_MS = 20_000;
+
+const silenciar = (player: AudioPlayer | null) => {
+  if (!player) return;
+
+  try {
+    player.loop = false;
+  } catch {}
+
+  try {
+    player.pause();
+  } catch {}
+
+  try {
+    player.remove();
+  } catch {}
+};
+
 // ==========================================================
 // 🚀 Componente Interno: PulseOverlay
 // Efeito de pulso com múltiplas ondas (3 ondas) - Adaptado do BottomMenu
 // ==========================================================
 const PulseOverlay = () => {
   // Referências para as três ondas de pulso
-  const pulse1 = useRef(new Animated.Value(0)).current;
+  const [pulse1] = useState(() => new Animated.Value(0));
   // const pulse2 = useRef(new Animated.Value(0)).current;
   // const pulse3 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Duração mais rápida para simular a urgência da chamada
     const DURATION = 2100;
-    const DELAY = DURATION / 3.5; //se quisar aplicar
-
     // Função para criar o loop de pulso com atraso
     const createPulse = (animatedValue: Animated.Value, delay: number) => {
       // Cria um loop que sequencia: 1) Atraso, 2) Expansão (0 -> 1), 3) Reset (1 -> 0)
@@ -138,38 +154,33 @@ export default function RecebendoChamadas({
   corridasPassageiro = 0,
 }: RecebendoChamadaProps) {
   const playerRef = useRef<AudioPlayer | null>(null);
+  const onRecusarRef = useRef(onRecusar);
 
-  const silenciar = (player: AudioPlayer | null) => {
-    if (!player) return;
-
-    try {
-      player.loop = false;
-    } catch {}
-
-    try {
-      player.pause();
-    } catch {}
-
-    try {
-      player.remove();
-    } catch {}
-  };
-  const progress = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    onRecusarRef.current = onRecusar;
+  }, [onRecusar]);
+  const [progress] = useState(() => new Animated.Value(1));
   const closedRef = useRef(false); // evita múltiplas chamadas de fechamento
-  const DURATION = 20000;
 
   // Variável para controlar a montagem/desmontagem do PulseOverlay
   // Usaremos um simples state para garantir que a animação seja reiniciada se o componente for remontado.
   const [isPulsing, setIsPulsing] = useState(true);
 
   useEffect(() => {
+    // O React remonta efeitos em desenvolvimento. Reiniciar estas refs evita
+    // que a limpeza da primeira montagem deixe a oferta aberta para sempre.
+    closedRef.current = false;
+    progress.stopAnimation();
+    progress.setValue(1);
+
     // anima barra
-    Animated.timing(progress, {
+    const animacao = Animated.timing(progress, {
       toValue: 0,
-      duration: DURATION,
+      duration: DURACAO_OFERTA_MS,
       easing: Easing.linear,
       useNativeDriver: false,
-    }).start();
+    });
+    animacao.start();
 
     // 🔹 O loop de pulsação agora é gerido pelo componente PulseOverlay,
     // então removemos a lógica de `pulseAnimationRef` daqui.
@@ -193,23 +204,23 @@ export default function RecebendoChamadas({
       setIsPulsing(false);
 
       silenciar(player);
-      playerRef.current = null;
+      if (playerRef.current === player) playerRef.current = null;
 
       try {
-        onRecusar();
+        onRecusarRef.current();
       } catch {}
-    }, DURATION);
+    }, DURACAO_OFERTA_MS);
 
     // cleanup do effect
     return () => {
       closedRef.current = true;
-      setIsPulsing(false); // Pára o pulso ao desmontar
       clearTimeout(expiracao);
+      animacao.stop();
 
       silenciar(player); // para e descarrega o player
-      playerRef.current = null;
+      if (playerRef.current === player) playerRef.current = null;
     };
-  }, []);
+  }, [progress]);
 
   const pararSom = () => {
     silenciar(playerRef.current);

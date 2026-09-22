@@ -1,63 +1,65 @@
 // app/home.tsx
+import AvaliarPassageiro from "@/components/AvaliarPassageiro";
+import CorridaEmAndamento from "@/components/CorridaEmAndamento";
 import FolhaInferiorMotorista from "@/components/FolhaInferiorMotorista";
-import FolhaInferiorPassageiro from "@/components/FolhaInferiorPassageiro";
 import GanhoDiario from "@/components/GanhoDiario";
 import Map from "@/components/Map";
-import CorridaEmAndamento from "@/components/CorridaEmAndamento";
-import { useRotaDaCorrida } from "@/hooks/useRotaDaCorrida";
-
-// altura aproximada da folha de corrida, pra rota não ser enquadrada atrás dela
-const ALTURA_FOLHA_CORRIDA = 330;
 import MenuInferiorMotorista from "@/components/MenuInferiorMotorista";
-import MenuInferiorPassageiro from "@/components/MenuInferiorPassageiro";
 import RecebendoChamada from "@/components/RecebendoChamada";
 import SideMenu from "@/components/SideMenu";
 import SolicitacoesCorrida from "@/components/SolicitacoesCorrida";
 import SolicitarCorrida from "@/components/SolicitarCorrida";
 import TopMenu from "@/components/TopMenu";
+import { Text } from "@/components/common/Texto";
 import { useAuth } from "@/context/AuthProvider";
-import AvaliarPassageiro from "@/components/AvaliarPassageiro";
 import { useAvaliacaoPendente } from "@/hooks/useAvaliacaoPendente";
 import { useDespachoMotorista } from "@/hooks/useDespachoMotorista";
-import { Ionicons } from "@expo/vector-icons";
+import { useRotaDaCorrida } from "@/hooks/useRotaDaCorrida";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Text } from "@/components/common/Texto";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
   Dimensions,
   Pressable,
   StyleSheet,
-  TouchableOpacity,
   View,
   useColorScheme,
 } from "react-native";
 import { Region } from "react-native-maps";
+import { useSharedValue } from "react-native-reanimated";
+
+// altura aproximada da folha de corrida, pra rota não ser enquadrada atrás dela
+const ALTURA_FOLHA_CORRIDA = 330;
+const ALTURA_FOLHA_ESPERA = 430;
 
 export default function Home() {
-  const { user, loading: authLoading, usuario } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const [menuVisible, setMenuVisible] = useState(false);
-  const [selectedTab, setSelectedTab] = useState("corrida");
   const [region, setRegion] = useState<Region | null>(null);
   const [destinationModalVisible, setDestinationModalVisible] = useState(false);
   const [solicitacoesCorrida, setSolicitacoesCorrida] = useState(false);
   const {
     disponivel,
     oferta,
+    ofertas,
+    carregandoOfertas,
     corrida,
     chegada,
+    espera,
     passageiro,
     posicao,
-    erro: erroDespacho,
+    precisaLiberacao,
     ocupado,
     alternarDisponibilidade,
     aceitar,
     recusar,
+    recarregarOfertas,
     avancar,
+    cancelarNaoComparecimento,
   } = useDespachoMotorista();
 
   const { rota: rotaDaCorrida, alvo: alvoDaCorrida } = useRotaDaCorrida(
@@ -77,12 +79,13 @@ export default function Home() {
 
   // ✨ NOVO: Estado para armazenar o índice do BottomSheet
   const [bottomSheetIndex, setBottomSheetIndex] = useState<number>(0);
+  const bottomSheetAnimatedIndex = useSharedValue(0);
 
   // ✨ NOVO: Estado do modal de ganhos foi elevado para cá
   const [ganhoModalVisivel, setGanhoModalVisivel] = useState(false);
 
   const drawerWidth = Math.round(Dimensions.get("window").width * 0.78);
-  const translateX = useRef(new Animated.Value(-drawerWidth)).current;
+  const [translateX] = useState(() => new Animated.Value(-drawerWidth));
 
   useEffect(() => {
     Animated.timing(translateX, {
@@ -110,6 +113,13 @@ export default function Home() {
   };
 
   // 🔹 Redirecionar para login se não estiver autenticado
+  // cadastro ainda em análise não opera: volta para a esteira de liberação
+  useEffect(() => {
+    if (precisaLiberacao) {
+      router.replace("/liberacao");
+    }
+  }, [precisaLiberacao, router]);
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace("/login");
@@ -117,40 +127,22 @@ export default function Home() {
   }, [user, authLoading, router]);
 
   const handleUserLocationFound = useCallback((userRegion: Region) => {
-    console.log("handleUserLocationFound teste:");
-
     userInitialRegion.current = {
       ...userRegion,
       latitudeDelta: 0.01,
       longitudeDelta: 0.01,
     };
 
-    // 🔹 Ajuste de deslocamento vertical inicial (para o snap point 0)
-    const offsetLatitude = 0.0064;
     const adjustedRegion: Region = {
       ...userRegion,
-      latitude: userRegion.latitude - offsetLatitude, // 🔹 Move o mapa para cima
+      latitude: userRegion.latitude,
       latitudeDelta: 0.01,
       longitudeDelta: 0.01,
     };
     setRegion(adjustedRegion);
   }, []);
 
-  // ✨ NOVO: Função para ajustar o mapa quando o BottomSheet muda de estado
-  const handleSheetStateChange = useCallback((index: number) => {
-    console.log(usuario, "BottomSheet Index1:", index);
-    // 🔹 Atualiza o estado que será passado para o Map
-    setBottomSheetIndex(index);
-    if (!userInitialRegion.current) {
-      // Garante que temos a localização do usuário antes de ajustar
-      return;
-    }
-  }, []);
-
   const onChangeBottomSheetMotorista = useCallback((index: number) => {
-    console.log(usuario, "onChangeBottomSheetMotorista Index:", index);
-    console.log(user, "user home:");
-
     setBottomSheetIndex(index);
     if (!userInitialRegion.current) {
       return;
@@ -182,18 +174,19 @@ export default function Home() {
         onRegionChange={setRegion}
         onUserLocationFound={handleUserLocationFound}
         bottomSheetIndex={bottomSheetIndex}
+        indiceFolhaAnimado={bottomSheetAnimatedIndex}
         isGanhoModalVisible={ganhoModalVisivel}
         rota={rotaDaCorrida}
         alvo={alvoDaCorrida}
         alvoEhDestino={corrida?.status_corrida === "em_andamento"}
-        alturaFolha={corrida === null ? 0 : ALTURA_FOLHA_CORRIDA}
+        alturaFolha={
+          corrida === null
+            ? 0
+            : corrida.status_corrida === "motorista_chegou"
+              ? ALTURA_FOLHA_ESPERA
+              : ALTURA_FOLHA_CORRIDA
+        }
       />
-
-      {erroDespacho.length > 0 && (
-        <View style={styles.faixaErro}>
-          <Text style={styles.textoErro}>{erroDespacho}</Text>
-        </View>
-      )}
 
       {corrida !== null && (
         <CorridaEmAndamento
@@ -210,7 +203,9 @@ export default function Home() {
           minutos={chegada?.minutos ?? null}
           distanciaKm={chegada?.distancia_km ?? null}
           ocupado={ocupado}
+          espera={espera}
           onAvancar={avancar}
+          onCancelarNaoComparecimento={cancelarNaoComparecimento}
         />
       )}
 
@@ -225,6 +220,7 @@ export default function Home() {
 
       {oferta !== null && corrida === null && (
         <RecebendoChamada
+          key={oferta.corrida_id}
           valor={oferta.valor_motorista}
           distanciaAteOrigem={oferta.distancia_ate_origem_km}
           distanciaDaCorrida={oferta.distancia_corrida_km}
@@ -241,6 +237,7 @@ export default function Home() {
       <GanhoDiario
         visible={ganhoModalVisivel}
         setVisible={setGanhoModalVisivel}
+        corridaAtivaId={corrida?.id ?? null}
       />
       <TopMenu onMenuPress={handleMenuOpen} />
 
@@ -253,7 +250,14 @@ export default function Home() {
       )}
 
       {/* Side Menu - zIndex menor */}
-      <SideMenu visible={menuVisible} onClose={closeMenu} drawerWidth={280} />
+      <SideMenu
+        visible={menuVisible}
+        onClose={closeMenu}
+        drawerWidth={280}
+        disponivel={disponivel}
+        emCorrida={corrida !== null}
+        onAlternarDisponibilidade={alternarDisponibilidade}
+      />
 
       {/* FolhaInferior */}
       {oferta === null && corrida === null && (
@@ -265,16 +269,10 @@ export default function Home() {
             />
           )}
 
-          {usuario?.tipoUsuario === "PASSAGEIRO" ? (
-            <FolhaInferiorPassageiro
-              onPressInput={() => setDestinationModalVisible(true)}
-              onSheetChange={handleSheetStateChange}
-            />
-          ) : (
-            <FolhaInferiorMotorista
-              onSheetChange={onChangeBottomSheetMotorista}
-            />
-          )}
+          <FolhaInferiorMotorista
+            onSheetChange={onChangeBottomSheetMotorista}
+            indiceAnimado={bottomSheetAnimatedIndex}
+          />
 
           <SolicitarCorrida
             visible={destinationModalVisible}
@@ -284,22 +282,25 @@ export default function Home() {
           <SolicitacoesCorrida
             visible={solicitacoesCorrida}
             onClose={() => setSolicitacoesCorrida(false)}
+            disponivel={disponivel}
+            carregando={carregandoOfertas}
+            ofertas={ofertas}
+            ocupado={ocupado}
+            onAtualizar={recarregarOfertas}
+            onAceitar={(corridaId) => {
+              setSolicitacoesCorrida(false);
+              void aceitar(corridaId);
+            }}
+            onRecusar={(corridaId) => recusar(corridaId)}
           />
 
-          {usuario?.tipoUsuario === "PASSAGEIRO" ? (
-            <MenuInferiorPassageiro
-              selectedTab={selectedTab}
-              onTabPress={setSelectedTab}
-            />
-          ) : (
-            <MenuInferiorMotorista
-              setSolicitacoesCorrida={() => setSolicitacoesCorrida(true)}
-              disponivel={disponivel}
-              emCorrida={corrida !== null}
-              ocupado={ocupado}
-              onAlternarDisponibilidade={alternarDisponibilidade}
-            />
-          )}
+          <MenuInferiorMotorista
+            setSolicitacoesCorrida={() => setSolicitacoesCorrida(true)}
+            disponivel={disponivel}
+            emCorrida={corrida !== null}
+            ocupado={ocupado}
+            onAlternarDisponibilidade={alternarDisponibilidade}
+          />
         </>
       )}
     </View>
@@ -307,20 +308,6 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  faixaErro: {
-    position: "absolute",
-    top: 110,
-    left: 10,
-    right: 10,
-    backgroundColor: "rgba(220, 38, 38, 0.92)",
-    borderRadius: 10,
-    padding: 10,
-  },
-  textoErro: {
-    color: "#fff",
-    fontSize: 13,
-    textAlign: "center",
-  },
   container: { flex: 1 },
   backdrop: {
     position: "absolute",

@@ -43,3 +43,6 @@ app-example
 /ios
 /android
 .env
+
+# notas de contexto (nao versionado)
+docs/docs-*/

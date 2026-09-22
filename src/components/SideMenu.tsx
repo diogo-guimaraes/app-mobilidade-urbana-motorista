@@ -1,7 +1,8 @@
 import { useAuth } from "@/context/AuthProvider";
 import { AnimationConfig, useSlideAnimation } from "@/hooks/useSlideAnimation";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Text } from "@/components/common/Texto";
 import {
   Animated,
@@ -14,13 +15,8 @@ import {
   View,
 } from "react-native";
 import CentralAjuda from "./CentralAjuda";
-import CentralGanhos from "./CentralGanhos";
-import ConvidarMotorista from "./ConvidarMotorista";
-import HistoricoMensagens from "./HistoricoMensagens";
+import HistoricoCorridas from "./HistoricoCorridas";
 import Preferencias from "./Preferencias";
-import HorasDirigindo from "./usuario/HorasDirigindo";
-import MeusVeiculos from "./usuario/MeusVeiculos";
-import PerfilUsuario from "./usuario/PerfilUsuario";
 interface SideMenuProps {
   visible: boolean;
   onClose: () => void;
@@ -29,6 +25,9 @@ interface SideMenuProps {
   menuItems?: MenuItem[];
   showOverlay?: boolean;
   enableSwipeGesture?: boolean;
+  disponivel: boolean;
+  emCorrida: boolean;
+  onAlternarDisponibilidade: (proximoEstado: boolean) => void;
 }
 
 interface MenuItem {
@@ -39,12 +38,8 @@ interface MenuItem {
 }
 
 const defaultMenuItems: MenuItem[] = [
-  { icon: "time-outline", label: "Ganhos" },
-  { icon: "time-outline", label: "Indique um amigo" },
-  { icon: "chatbubble-outline", label: "Notificações" },
+  { icon: "time-outline", label: "Histórico de corridas" },
   { icon: "shield-checkmark-outline", label: "Central de Ajuda" },
-  { icon: "card-outline", label: "Veículo" },
-  { icon: "card-outline", label: "Horas dirigindo" },
   { icon: "settings-outline", label: "Preferências" },
 ];
 
@@ -56,7 +51,11 @@ export default function SideMenu({
   menuItems = defaultMenuItems,
   showOverlay = true,
   enableSwipeGesture = true,
+  disponivel,
+  emCorrida,
+  onAlternarDisponibilidade,
 }: SideMenuProps) {
+  const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
   const { translateX, overlayOpacity, closeAnimation } = useSlideAnimation(
     visible,
@@ -65,16 +64,13 @@ export default function SideMenu({
   );
 
   const [isMounted, setIsMounted] = useState(visible);
-  const [showHistoricoMensagens, setShowHistoricoMensagens] = useState(false);
+  const [showHistoricoCorridas, setShowHistoricoCorridas] = useState(false);
   const [showCentralAjuda, setShowCentralAjuda] = useState(false);
-  const [showPefilUsuario, setShowPerfilUsuario] = useState(false);
-  const [showMeusVeiculos, setShowMeusVeiculos] = useState(false);
-  const [showConvidarMotorista, setShowConvidarMotorista] = useState(false);
-  const [showHorasDirigindo, setShowHorasDirigindo] = useState(false);
-  const [showCentralGannhos, setShowCentralGannhos] = useState(false);
   const [showPreferencias, setShowPreferencias] = useState(false);
 
-  const handleDisconnect = () => {};
+  const handleDisconnect = () => {
+    if (disponivel && !emCorrida) onAlternarDisponibilidade(false);
+  };
 
   const closeMenu = useCallback(() => {
     closeAnimation(onClose);
@@ -87,32 +83,12 @@ export default function SideMenu({
         setShowPreferencias(false);
         return true;
       }
-      if (showCentralGannhos) {
-        setShowCentralGannhos(false);
-        return true;
-      }
-      if (showPefilUsuario) {
-        setShowPerfilUsuario(false);
-        return true;
-      }
-      if (showConvidarMotorista) {
-        setShowConvidarMotorista(false);
-        return true;
-      }
-      if (showHorasDirigindo) {
-        setShowHorasDirigindo(false);
-        return true;
-      }
-      if (showHistoricoMensagens) {
-        setShowHistoricoMensagens(false);
+      if (showHistoricoCorridas) {
+        setShowHistoricoCorridas(false);
         return true;
       }
       if (showCentralAjuda) {
         setShowCentralAjuda(false);
-        return true;
-      }
-      if (showMeusVeiculos) {
-        setShowMeusVeiculos(false);
         return true;
       }
       if (visible) {
@@ -126,11 +102,17 @@ export default function SideMenu({
       onBackPress,
     );
     return () => subscription.remove();
-  }, [visible, closeMenu]);
+  }, [
+    visible,
+    closeMenu,
+    showPreferencias,
+    showHistoricoCorridas,
+    showCentralAjuda,
+  ]);
 
   useEffect(() => {
     if (visible) {
-      setIsMounted(true);
+      setTimeout(() => setIsMounted(true), 0);
     } else {
       const closeDelay = animationConfig?.duration ?? 300;
       const t = setTimeout(() => setIsMounted(false), closeDelay + 20);
@@ -138,53 +120,49 @@ export default function SideMenu({
     }
   }, [visible, animationConfig?.duration]);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => enableSwipeGesture,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return enableSwipeGesture && Math.abs(gestureState.dx) > 10;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx < 0) translateX.setValue(gestureState.dx);
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx < -50 || gestureState.vx < -0.5) {
-          closeMenu();
-        } else {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            damping: animationConfig.damping || 20,
-            stiffness: animationConfig.stiffness || 90,
-          }).start();
-        }
-      },
-    }),
-  ).current;
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => enableSwipeGesture,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return enableSwipeGesture && Math.abs(gestureState.dx) > 10;
+        },
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dx < 0) translateX.setValue(gestureState.dx);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dx < -50 || gestureState.vx < -0.5) {
+            closeMenu();
+          } else {
+            Animated.spring(translateX, {
+              toValue: 0,
+              useNativeDriver: true,
+              damping: animationConfig.damping || 20,
+              stiffness: animationConfig.stiffness || 90,
+            }).start();
+          }
+        },
+      }),
+    [
+      animationConfig.damping,
+      animationConfig.stiffness,
+      closeMenu,
+      enableSwipeGesture,
+      translateX,
+    ],
+  );
 
   const handleLogout = () => {
     closeMenu();
-    setTimeout(() => logout(), 300);
+    void logout();
   };
 
   const menuSelecionado = (item: MenuItem) => {
-    if (item.label === "Indique um amigo") {
-      setShowConvidarMotorista(true);
-    }
-    if (item.label === "Notificações") {
-      setShowHistoricoMensagens(true);
+    if (item.label === "Histórico de corridas") {
+      setShowHistoricoCorridas(true);
     }
     if (item.label === "Central de Ajuda") {
       setShowCentralAjuda(true);
-    }
-    if (item.label === "Veículo") {
-      setShowMeusVeiculos(true);
-    }
-    if (item.label === "Horas dirigindo") {
-      setShowHorasDirigindo(true);
-    }
-    if (item.label === "Ganhos") {
-      setShowCentralGannhos(true);
     }
     if (item.label === "Preferências") {
       setShowPreferencias(true);
@@ -195,40 +173,19 @@ export default function SideMenu({
 
   return (
     <>
-      <HistoricoMensagens
-        visible={showHistoricoMensagens}
-        onClose={() => setShowHistoricoMensagens(false)}
+      <HistoricoCorridas
+        visible={showHistoricoCorridas}
+        onClose={() => setShowHistoricoCorridas(false)}
       />
       <CentralAjuda
         visible={showCentralAjuda}
         onClose={() => setShowCentralAjuda(false)}
       />
-      <PerfilUsuario
-        visible={showPefilUsuario}
-        onClose={() => setShowPerfilUsuario(false)}
-      />
-      <MeusVeiculos
-        visible={showMeusVeiculos}
-        onClose={() => setShowMeusVeiculos(false)}
-      />
-      <ConvidarMotorista
-        visible={showConvidarMotorista}
-        onClose={() => setShowConvidarMotorista(false)}
-      />
-      <HorasDirigindo
-        visible={showHorasDirigindo}
-        onClose={() => setShowHorasDirigindo(false)}
-      />
-      <CentralGanhos
-        visible={showCentralGannhos}
-        onClose={() => setShowCentralGannhos(false)}
-      />
-
       <Preferencias
         visible={showPreferencias}
         onClose={() => setShowPreferencias(false)}
         onDisconnect={handleDisconnect}
-        buscandoCorrida={false}
+        buscandoCorrida={disponivel && !emCorrida}
       />
 
       <View style={[StyleSheet.absoluteFill, { zIndex: 20 }]}>
@@ -245,6 +202,7 @@ export default function SideMenu({
             styles.sideMenu,
             {
               width: drawerWidth,
+              paddingTop: Math.max(insets.top + 12, 40),
               transform: [{ translateX }],
             },
           ]}
@@ -252,38 +210,24 @@ export default function SideMenu({
         >
           {/* HEADER DE PERFIL */}
           <View style={styles.profileSection}>
-            <TouchableOpacity onPress={() => setShowPerfilUsuario(true)}>
+            {user?.foto_thumbnail || user?.foto ? (
               <Image
-                source={{ uri: "https://i.pravatar.cc/150?img=1" }}
+                source={{ uri: user.foto_thumbnail || user.foto }}
                 style={styles.avatar}
               />
-            </TouchableOpacity>
+            ) : (
+              <View style={[styles.avatar, styles.avatarVazio]}>
+                <Ionicons name="person" size={36} color="#777" />
+              </View>
+            )}
 
             <View style={styles.nameRow}>
-              <Text style={styles.userName}>{user || "Diogo"}</Text>
-              <Text style={styles.ratingText}> · 4,82 ★</Text>
+              <Text style={styles.userName}>{user?.name || "Motorista"}</Text>
             </View>
 
-            <TouchableOpacity style={styles.statusBadge}>
-              <View style={styles.badgeContent}>
-                <Ionicons name="shield-checkmark" size={14} color="#FFF" />
-                <Text style={styles.statusText}>Carro · Fase 3</Text>
-                <Ionicons name="chevron-forward" size={14} color="#FFF" />
-              </View>
-              <View style={styles.notificationDot} />
-            </TouchableOpacity>
-
-            <View style={styles.statsRow}>
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>48%</Text>
-                <Text style={styles.statLabel}>Taxa de Aceitação</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>78%</Text>
-                <Text style={styles.statLabel}>Taxa de Finalização</Text>
-              </View>
-            </View>
+            <Text style={styles.statusReal}>
+              {emCorrida ? "Em corrida" : disponivel ? "Online" : "Offline"}
+            </Text>
           </View>
 
           <View style={styles.menuList}>
@@ -292,7 +236,16 @@ export default function SideMenu({
                 key={index}
                 style={styles.menuItem}
                 onPress={() => menuSelecionado(item)}
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
               >
+                <Ionicons
+                  name={
+                    item.icon as React.ComponentProps<typeof Ionicons>["name"]
+                  }
+                  size={19}
+                  color={item.color ?? "#333"}
+                />
                 <Text
                   style={[styles.menuText, item.color && { color: item.color }]}
                 >
@@ -302,7 +255,13 @@ export default function SideMenu({
             ))}
 
             {user && (
-              <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={handleLogout}
+                accessibilityRole="button"
+                accessibilityLabel="Sair da conta"
+              >
+                <Ionicons name="log-out-outline" size={19} color="#FF4D4D" />
                 <Text style={[styles.menuText, styles.logoutText]}>Sair</Text>
               </TouchableOpacity>
             )}
@@ -338,6 +297,11 @@ const styles = StyleSheet.create({
     borderRadius: 42.5,
     marginBottom: 15,
   },
+  avatarVazio: {
+    backgroundColor: "#F0F1F3",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -348,67 +312,10 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#111",
   },
-  ratingText: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#111",
-  },
-  statusBadge: {
-    backgroundColor: "#313663",
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 25,
-  },
-  badgeContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  statusText: {
-    color: "#FFF",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  notificationDot: {
-    position: "absolute",
-    top: -2,
-    right: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#FF4D4D",
-    borderWidth: 1,
-    borderColor: "#FFF",
-  },
-  statsRow: {
-    flexDirection: "row",
-    width: "100%",
-    justifyContent: "space-around",
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-  statBox: {
-    alignItems: "center",
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#111",
-  },
-  statLabel: {
-    fontSize: 12,
+  statusReal: {
     color: "#666",
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    height: "100%",
-    backgroundColor: "#EEE",
+    fontSize: 13,
+    marginBottom: 8,
   },
   // LISTA DE ITENS
   menuList: {
@@ -417,9 +324,12 @@ const styles = StyleSheet.create({
   },
   menuItem: {
     paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   menuText: {
-    fontSize: 22,
+    fontSize: 18,
     color: "#111",
     fontWeight: "500",
   },

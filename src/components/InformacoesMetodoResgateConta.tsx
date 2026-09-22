@@ -1,5 +1,6 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Text } from "@/components/common/Texto";
 import {
   Animated,
@@ -26,8 +27,9 @@ export default function InformacoesMetodoResgateConta({
   onClose,
   duration = 200,
 }: props) {
-  const translateX = useRef(new Animated.Value(width)).current;
-  const overlayOpacity = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
+  const [translateX] = useState(() => new Animated.Value(width));
+  const [overlayOpacity] = useState(() => new Animated.Value(0));
   const [isMounted, setIsMounted] = useState(visible);
 
   const [
@@ -56,7 +58,7 @@ export default function InformacoesMetodoResgateConta({
 
   useEffect(() => {
     if (visible) {
-      setIsMounted(true);
+      setTimeout(() => setIsMounted(true), 0);
       Animated.parallel([
         Animated.timing(translateX, {
           toValue: 0,
@@ -83,7 +85,7 @@ export default function InformacoesMetodoResgateConta({
         }),
       ]).start(({ finished }) => finished && setIsMounted(false));
     }
-  }, [visible, duration]);
+  }, [visible, duration, translateX, overlayOpacity]);
 
   if (!isMounted) return null;
 
@@ -106,7 +108,12 @@ export default function InformacoesMetodoResgateConta({
 
         <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
           {/* HEADER RETO */}
-          <View style={styles.orangeHeader}>
+          <View
+            style={[
+              styles.orangeHeader,
+              { paddingTop: Math.max(insets.top + 12, 50) },
+            ]}
+          >
             <TouchableOpacity onPress={onClose} style={styles.backButton}>
               <Ionicons name="chevron-back" size={28} color="#fff" />
             </TouchableOpacity>

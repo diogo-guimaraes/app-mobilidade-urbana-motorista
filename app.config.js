@@ -1,3 +1,5 @@
+/* global __dirname */
+// CODEX: 25 linhas alteradas neste arquivo; módulos nativos, teclado e chave obrigatória do mapa.
 const fs = require("fs");
 const path = require("path");
 
@@ -16,7 +18,21 @@ function lerEnv(nome) {
   return linha ? linha.slice(linha.indexOf("=") + 1).trim() : "";
 }
 
-const ehDesenvolvimento = process.env.APP_VARIANT !== "production";
+const ehDesenvolvimento = process.env.APP_VARIANT !== "production" && process.env.EAS_BUILD_PROFILE !== "production";
+const googleMapsAndroidKey = lerEnv("GOOGLE_MAPS_ANDROID_KEY");
+// CODEX: preserve o identificador do APK já instalado ao informá-lo no ambiente de build.
+const androidAppPackage = lerEnv("ANDROID_APP_PACKAGE");
+const iosAppBundleId = lerEnv("IOS_APP_BUNDLE_ID");
+
+if (!ehDesenvolvimento && process.env.EAS_BUILD_PLATFORM !== "ios" && !googleMapsAndroidKey) {
+  throw new Error("GOOGLE_MAPS_ANDROID_KEY é obrigatória no build Android de produção.");
+}
+if (!ehDesenvolvimento && process.env.EAS_BUILD_PLATFORM !== "ios" && !androidAppPackage) {
+  throw new Error("ANDROID_APP_PACKAGE precisa corresponder ao pacote do APK já instalado antes do build de produção.");
+}
+if (!ehDesenvolvimento && process.env.EAS_BUILD_PLATFORM === "ios" && !iosAppBundleId) {
+  throw new Error("IOS_APP_BUNDLE_ID precisa corresponder ao identificador do aplicativo iOS já instalado.");
+}
 
 module.exports = {
   name: "p6driver-frontend",
@@ -29,10 +45,12 @@ module.exports = {
   userInterfaceStyle: "automatic",
 
   ios: {
+    ...(iosAppBundleId ? { bundleIdentifier: iosAppBundleId } : {}),
     supportsTablet: true,
   },
 
   android: {
+    ...(androidAppPackage ? { package: androidAppPackage } : {}),
     adaptiveIcon: {
       backgroundColor: "#E6F4FE",
       foregroundImage: "./assets/images/android-icon-foreground.png",
@@ -41,7 +59,7 @@ module.exports = {
     },
     predictiveBackGestureEnabled: false,
     config: {
-      googleMaps: { apiKey: lerEnv("GOOGLE_MAPS_ANDROID_KEY") },
+      googleMaps: { apiKey: googleMapsAndroidKey },
     },
   },
 
@@ -53,6 +71,7 @@ module.exports = {
 
   plugins: [
     "expo-router",
+    ["react-native-maps", { androidGoogleMapsApiKey: googleMapsAndroidKey }],
     [
       "expo-splash-screen",
       {
@@ -78,6 +97,8 @@ module.exports = {
     "expo-status-bar",
     "expo-web-browser",
     "expo-audio",
+    // CODEX: 2 linhas alteradas neste arquivo; habilita fotos com descrição em português no iPhone.
+    ["expo-image-picker", { photosPermission: "Permitir selecionar fotos dos seus documentos para análise." }],
     "expo-asset",
     "expo-secure-store",
 
