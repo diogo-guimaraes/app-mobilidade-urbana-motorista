@@ -111,9 +111,7 @@ export function useCadastroMotorista() {
           name: arquivo.name,
           type: arquivo.mimeType ?? "application/octet-stream",
         } as unknown as Blob);
-        await api.post("/motorista/cadastro/documentos", dados, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        await api.post("/motorista/cadastro/documentos", dados);
         await carregar();
         return true;
       } catch (falha) {

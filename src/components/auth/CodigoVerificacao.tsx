@@ -55,6 +55,7 @@ export default function CodigoVerificacao({
 
   // INPUT INVISÍVEL
   const hiddenInputRef = useRef<TextInput>(null);
+  const verificandoRef = useRef(false);
 
   useEffect(() => {
     if (user && !loading) {
@@ -64,6 +65,9 @@ export default function CodigoVerificacao({
 
   // Confere o código digitado contra o backend e autentica o usuário
   const verificarCodigo = async (codigo: string) => {
+    if (verificandoRef.current) return;
+
+    verificandoRef.current = true;
     setIsLoading(true);
 
     try {
@@ -75,14 +79,13 @@ export default function CodigoVerificacao({
       const { user, token } = response.data;
 
       await loginComToken(user, token);
-    } catch (error) {
-      console.log("Erro ao verificar código:", error);
-
+    } catch {
       setHasError(true);
       setCode(["", "", "", ""]);
 
       hiddenInputRef.current?.focus();
     } finally {
+      verificandoRef.current = false;
       setIsLoading(false);
     }
   };
@@ -103,6 +106,7 @@ export default function CodigoVerificacao({
         .slice(0, 4);
 
       if (codigo.length !== 4) {
+        setRecebendoCodigo(false);
         return;
       }
 
@@ -131,9 +135,7 @@ export default function CodigoVerificacao({
       setTimeout(() => {
         verificarCodigo(codigo).finally(() => setRecebendoCodigo(false));
       }, 1000);
-    } catch (error) {
-      console.log("Erro ao receber código:", error);
-
+    } catch {
       setRecebendoCodigo(false);
     }
   };

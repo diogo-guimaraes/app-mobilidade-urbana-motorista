@@ -87,9 +87,7 @@ export default function LoginEmail() {
       await login(email.trim(), senha);
 
       router.replace("/home");
-    } catch (error: any) {
-      console.log(error);
-
+    } catch (error: unknown) {
       setErroLogin(
         ehErroDeRede(error)
           ? "Não foi possível conectar. Verifique sua internet."

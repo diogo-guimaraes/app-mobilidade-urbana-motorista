@@ -9,7 +9,6 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -144,10 +143,7 @@ export default function Login() {
 
             <View style={styles.inputWrapper}>
               <View style={styles.countryPicker}>
-                <Image
-                  source={{ uri: "https://flagcdn.com/w40/br.png" }}
-                  style={styles.flag}
-                />
+                <Text style={styles.flag}>🇧🇷</Text>
                 <Text style={styles.countryCode}>+55</Text>
                 <Ionicons name="caret-down" size={12} color="#666" />
               </View>
@@ -333,8 +329,8 @@ const styles = StyleSheet.create({
     marginRight: 15,
   },
   flag: {
-    width: 20,
-    height: 14,
+    fontSize: 18,
+    lineHeight: 22,
     marginRight: 5,
   },
   countryCode: {

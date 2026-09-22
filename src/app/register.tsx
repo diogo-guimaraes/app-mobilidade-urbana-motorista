@@ -10,7 +10,6 @@ import {
   BackHandler,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -38,7 +37,7 @@ export default function Cadastro() {
       return;
     }
 
-    setStep(step - 1);
+    setStep(step === 3 ? 1 : step - 1);
   }, [step, router]);
 
   useEffect(() => {
@@ -54,9 +53,6 @@ export default function Cadastro() {
   const [email, setEmail] = useState("");
   const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-  // step 2
-  const [codigo, setCodigo] = useState("");
-
   // step 3
   const [senha, setSenha] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -69,7 +65,6 @@ export default function Cadastro() {
   const [cpf, setCpf] = useState("");
   const [dataNascimento, setDataNascimento] = useState("");
   const dataNascimentoRef = useRef<TextInput>(null);
-  const codigoOcultoRef = useRef<TextInput>(null);
 
   // step 6
   const [concordo, setConcordo] = useState(false);
@@ -80,9 +75,6 @@ export default function Cadastro() {
   const [erroCpfServidor, setErroCpfServidor] = useState("");
   const [erroSenhaServidor, setErroSenhaServidor] = useState("");
   const [erroIdadeServidor, setErroIdadeServidor] = useState("");
-
-  // verificar se código tem 4 dígitos
-  const codigoValido = codigo.length === 4;
 
   // valida se a data preenchida existe de verdade (dia/mês dentro do range e o mês tem esse dia)
   const dataNascimentoValida = (valor: string) => {
@@ -124,8 +116,33 @@ export default function Cadastro() {
     dataNascimentoFormatoValido && calcularIdade(dataNascimento) >= 18;
   const menorDeIdade = dataNascimentoFormatoValido && !maiorDeIdade;
 
+  const cpfValido = (valor: string) => {
+    const numeros = valor.replace(/\D/g, "");
+    if (numeros.length !== 11 || /^(\d)\1{10}$/.test(numeros)) return false;
+
+    const digito = (tamanho: number) => {
+      const soma = numeros
+        .slice(0, tamanho)
+        .split("")
+        .reduce(
+          (total, numero, indice) =>
+            total + Number(numero) * (tamanho + 1 - indice),
+          0,
+        );
+      const resto = (soma * 10) % 11;
+      return resto === 10 ? 0 : resto;
+    };
+
+    return (
+      digito(9) === Number(numeros[9]) && digito(10) === Number(numeros[10])
+    );
+  };
+
+  const cpfFormatoValido = cpfValido(cpf);
+  const cpfInvalido = cpf.length === 14 && !cpfFormatoValido;
+
   // validação step 5
-  const step5Valido = cpf.length === 14 && maiorDeIdade;
+  const step5Valido = cpfFormatoValido && maiorDeIdade;
 
   // máscara CPF
   const formatarCPF = (value: string) => {
@@ -246,7 +263,6 @@ export default function Cadastro() {
 
   const podeAvancarPorPasso: Record<number, boolean> = {
     1: emailValido,
-    2: codigoValido,
     3: senhaValida,
     4: Boolean(name.trim()),
     5: step5Valido,
@@ -265,7 +281,7 @@ export default function Cadastro() {
       return;
     }
 
-    setStep(step + 1);
+    setStep(step === 1 ? 3 : step + 1);
   };
 
   return (
@@ -316,7 +332,7 @@ export default function Cadastro() {
                     autoCapitalize="none"
                     autoCorrect={false}
                     returnKeyType={emailValido ? "go" : "done"}
-                    onSubmitEditing={() => emailValido && setStep(2)}
+                    onSubmitEditing={() => emailValido && setStep(3)}
                   />
                 </View>
                 <View style={styles.inputUnderline} />
@@ -333,87 +349,6 @@ export default function Cadastro() {
                 >
                   <Text style={styles.loginText}>Já tem conta? Faça login</Text>
                 </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* STEP 2 */}
-          {step === 2 && (
-            <View style={styles.stepContainer}>
-              <View>
-                <Text style={styles.title}>
-                  Digite o código de 4 dígitos enviado para:
-                </Text>
-
-                <Text style={styles.highlightText}>{email}</Text>
-
-                <TextInput
-                  ref={codigoOcultoRef}
-                  autoFocus
-                  value={codigo}
-                  onChangeText={(text) =>
-                    setCodigo(text.replace(/[^0-9]/g, "").slice(0, 4))
-                  }
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  caretHidden
-                  contextMenuHidden
-                  returnKeyType={codigoValido ? "go" : "done"}
-                  onSubmitEditing={() => codigoValido && setStep(3)}
-                  style={styles.codigoOculto}
-                />
-
-                <Pressable
-                  style={styles.codigoGrade}
-                  onPress={() => {
-                    codigoOcultoRef.current?.blur();
-
-                    setTimeout(() => codigoOcultoRef.current?.focus(), 50);
-                  }}
-                >
-                  {[0, 1, 2, 3].map((posicao) => {
-                    const digito = codigo[posicao];
-                    const ativa =
-                      posicao === Math.min(codigo.length, 3) && !digito;
-
-                    return (
-                      <View key={posicao} style={styles.codigoCelula}>
-                        <View style={styles.codigoCaixa}>
-                          <Text
-                            style={[
-                              styles.codigoTexto,
-                              { color: digito ? "#000" : "#D9D9D9" },
-                            ]}
-                          >
-                            {digito || "0"}
-                          </Text>
-                        </View>
-
-                        <View
-                          style={[
-                            styles.codigoLinha,
-                            {
-                              backgroundColor:
-                                digito || ativa ? "#FF5500" : "#E5E5E5",
-                            },
-                          ]}
-                        />
-                      </View>
-                    );
-                  })}
-                </Pressable>
-
-                <Text style={styles.smallText}>
-                  Verifique a caixa de entrada e o spam.
-                </Text>
-                <Text
-                  style={styles.resendLink}
-                  onPress={() => {
-                    console.log("Código reenviado!");
-                  }}
-                >
-                  Reenviar código
-                </Text>
               </View>
             </View>
           )}
@@ -506,7 +441,8 @@ export default function Cadastro() {
                 <View
                   style={[
                     styles.inputWrapper,
-                    erroCpfServidor && styles.inputWrapperError,
+                    (erroCpfServidor || cpfInvalido) &&
+                      styles.inputWrapperError,
                   ]}
                 >
                   <TextInput
@@ -530,6 +466,8 @@ export default function Cadastro() {
 
                 {erroCpfServidor ? (
                   <ErrorBanner message={erroCpfServidor} />
+                ) : cpfInvalido ? (
+                  <ErrorBanner message="Informe um CPF válido." />
                 ) : null}
 
                 <View style={styles.space} />
@@ -657,44 +595,6 @@ export default function Cadastro() {
 }
 
 const styles = StyleSheet.create({
-  codigoOculto: {
-    position: "absolute",
-    opacity: 0,
-    width: 20,
-    height: 20,
-  },
-
-  codigoGrade: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-    paddingHorizontal: 10,
-    marginBottom: 20,
-  },
-
-  codigoCelula: {
-    alignItems: "center",
-    width: "20%",
-  },
-
-  codigoCaixa: {
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 8,
-    width: "100%",
-  },
-
-  codigoTexto: {
-    fontSize: 32,
-    fontWeight: "400",
-    textAlign: "center",
-  },
-
-  codigoLinha: {
-    height: 1.5,
-    width: "100%",
-  },
-
   badgeContainer: {
     backgroundColor: "#FFF3E0",
     paddingHorizontal: 12,
