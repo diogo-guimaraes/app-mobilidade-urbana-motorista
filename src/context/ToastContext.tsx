@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 
 export type TipoToast = "success" | "error" | "warning" | "info";
 
@@ -32,6 +32,8 @@ interface ToastContextValue {
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
+const DURACAO_ENTRADA_MS = 220;
+const DURACAO_SAIDA_MS = 200;
 
 const visual: Record<
   TipoToast,
@@ -66,18 +68,52 @@ function ToastItem({
   remover: (id: number) => void;
 }) {
   const aparencia = visual[toast.tipo];
+  const [opacidade] = useState(() => new Animated.Value(0));
+  const [deslocamento] = useState(() => new Animated.Value(8));
 
   useEffect(() => {
-    const temporizador = setTimeout(() => remover(toast.id), toast.duracaoMs);
+    const animar = (
+      opacidadeFinal: number,
+      deslocamentoFinal: number,
+      duracao: number,
+      curva: (valor: number) => number,
+    ) =>
+      Animated.parallel([
+        Animated.timing(opacidade, {
+          toValue: opacidadeFinal,
+          duration: duracao,
+          easing: curva,
+          useNativeDriver: true,
+        }),
+        Animated.timing(deslocamento, {
+          toValue: deslocamentoFinal,
+          duration: duracao,
+          easing: curva,
+          useNativeDriver: true,
+        }),
+      ]);
+
+    animar(1, 0, DURACAO_ENTRADA_MS, Easing.out(Easing.cubic)).start();
+
+    const temporizador = setTimeout(
+      () =>
+        animar(0, -8, DURACAO_SAIDA_MS, Easing.in(Easing.cubic)).start(() =>
+          remover(toast.id),
+        ),
+      Math.max(0, toast.duracaoMs - DURACAO_SAIDA_MS),
+    );
 
     return () => clearTimeout(temporizador);
-  }, [remover, toast.duracaoMs, toast.id]);
+  }, [deslocamento, opacidade, remover, toast.duracaoMs, toast.id]);
 
   return (
-    <View
+    <Animated.View
       accessibilityLiveRegion="polite"
       accessibilityRole="alert"
-      style={styles.toast}
+      style={[
+        styles.toast,
+        { opacity: opacidade, transform: [{ translateY: deslocamento }] },
+      ]}
     >
       <View style={[styles.iconeCirculo, { backgroundColor: aparencia.cor }]}>
         <Ionicons name={aparencia.icone} size={23} color="#FFFFFF" />
@@ -88,7 +124,7 @@ function ToastItem({
           <Text style={styles.mensagem}>{toast.mensagem}</Text>
         ) : null}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -102,6 +138,8 @@ export function ToastProvider({ children }: PropsWithChildren) {
   }, []);
 
   const mostrarToast = useCallback((opcoes: OpcoesToast) => {
+    if (!opcoes.chave?.endsWith(":aceita")) return;
+
     const tipo = opcoes.tipo ?? "info";
     const chave =
       opcoes.chave ?? [tipo, opcoes.titulo, opcoes.mensagem ?? ""].join(":");
@@ -124,12 +162,9 @@ export function ToastProvider({ children }: PropsWithChildren) {
       id: proximoId.current++,
       chave,
       titulo: opcoes.titulo,
-      mensagem: opcoes.mensagem,
+      mensagem: undefined,
       tipo,
-      duracaoMs: Math.min(
-        12_000,
-        Math.max(5000, opcoes.duracaoMs ?? (tipo === "error" ? 8000 : 6500)),
-      ),
+      duracaoMs: Math.min(4000, Math.max(1800, opcoes.duracaoMs ?? 2800)),
     };
 
     setToasts([novoToast]);

@@ -1,6 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
 import { Text } from "@/components/common/Texto";
+import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Buscando from "./Buscando";
@@ -74,7 +74,7 @@ export default function MenuInferiorMotorista({
             onPress={MostrarPreferencias}
             activeOpacity={0.8}
           >
-            <Ionicons name="options-outline" size={28} color="#000" />
+            <Ionicons name="options-outline" size={32} color="#000" />
             {/* 🔴 Pontinho vermelho de status */}
             <View
               style={[
@@ -106,7 +106,7 @@ export default function MenuInferiorMotorista({
             onPress={setSolicitacoesCorrida}
             activeOpacity={0.8}
           >
-            <Ionicons name="document-text-outline" size={28} color="#000" />
+            <Ionicons name="document-text-outline" size={32} color="#000" />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -129,29 +129,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   iconButton: {
     position: "relative",
-    width: 36,
-    height: 36,
+    width: 52,
+    height: 52,
     alignItems: "center",
     justifyContent: "center",
   },
   redDot: {
     position: "absolute",
-    top: 3,
-    left: 5,
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    top: 8,
+    left: 8,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
     backgroundColor: "red",
   },
   connectButton: {
-    paddingVertical: 8,
+    paddingVertical: 18,
     paddingHorizontal: 12,
-    borderRadius: 20,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
@@ -163,12 +163,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 3,
     elevation: 3,
-    minHeight: 48,
+    minHeight: 60,
   },
   connectTextLarge: {
     color: "black",
-    fontSize: 20,
-    fontWeight: "600",
+    fontSize: 24,
+    fontWeight: "700",
     textAlign: "center",
   },
 });

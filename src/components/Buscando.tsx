@@ -189,8 +189,8 @@ const styles = StyleSheet.create({
   },
   word: {
     color: "#000",
-    fontSize: 20,
-    lineHeight: 25,
+    fontSize: 22,
+    lineHeight: 28,
     fontWeight: "700",
     letterSpacing: 0.3,
   },
