@@ -1,5 +1,3 @@
-// context/AuthProvider.tsx
-
 import {
   createContext,
   ReactNode,
@@ -15,6 +13,7 @@ import * as SecureStore from "expo-secure-store";
 import { AppState } from "react-native";
 
 import { api, ehErroDeRede, setUnauthorizedHandler } from "../Services/api";
+import { encerrarEcho } from "../Services/echo";
 
 // =========================
 // INTERFACES
@@ -104,6 +103,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const [loading, setLoading] = useState(true);
 
+  const limparSessaoLocal = useCallback(async () => {
+    encerrarEcho();
+    setUser(null);
+    await Promise.allSettled([
+      SecureStore.deleteItemAsync("token"),
+      SecureStore.deleteItemAsync("user"),
+    ]);
+  }, []);
+
   // =========================
   // RESTAURA SESSÃO
   // =========================
@@ -117,21 +125,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // só restaura se tiver os dois; usuário sem token não consegue
         // autenticar nenhuma requisição
         if (storedUser && storedToken) {
-          const parsedUser = JSON.parse(storedUser);
+          const parsedUser = JSON.parse(storedUser) as Partial<Usuario>;
 
-          setUser(parsedUser);
+          if (!parsedUser.id || !parsedUser.name) {
+            await limparSessaoLocal();
+            return;
+          }
+
+          setUser(parsedUser as Usuario);
+        } else if (storedUser || storedToken) {
+          await limparSessaoLocal();
         }
       } catch (error) {
-        console.error("Erro ao restaurar sessão:", error);
-
-        setUser(null);
+        if (__DEV__) console.error("Erro ao restaurar sessão:", error);
+        await limparSessaoLocal();
       } finally {
         setLoading(false);
       }
     };
 
     restoreSession();
-  }, []);
+  }, [limparSessaoLocal]);
 
   // =========================
   // LOGIN
@@ -148,11 +162,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const { user, token } = response.data;
 
-      setUser(user);
-
       await SecureStore.setItemAsync("user", JSON.stringify(user));
 
       await SecureStore.setItemAsync("token", token);
+      setUser(user);
+      logoutEmAndamento.current = false;
     } catch (error: any) {
       if (__DEV__) {
         console.error(
@@ -171,11 +185,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const loginComToken = async (userData: Usuario, token: string) => {
     try {
       setLoading(true);
-      setUser(userData);
 
       await SecureStore.setItemAsync("user", JSON.stringify(userData));
 
       await SecureStore.setItemAsync("token", token);
+      setUser(userData);
+      logoutEmAndamento.current = false;
     } catch (error) {
       console.error("Erro ao autenticar com token:", error);
 
@@ -188,14 +203,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // =========================
   // LOGOUT
   // =========================
-
-  // Limpa a sessão local sem chamar o backend (usado quando o token já é
-  // sabidamente inválido, ex: resposta 401 de qualquer requisição).
-  const limparSessaoLocal = async () => {
-    await SecureStore.deleteItemAsync("token");
-    await SecureStore.deleteItemAsync("user");
-    setUser(null);
-  };
 
   const logout = async () => {
     if (logoutEmAndamento.current) return;
@@ -216,17 +223,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    setUnauthorizedHandler(() => {
+    setUnauthorizedHandler(async () => {
       if (logoutEmAndamento.current) return;
+      logoutEmAndamento.current = true;
       // token já é inválido (401): só limpa localmente, não chama /auth/logout
-      limparSessaoLocal();
+      await limparSessaoLocal();
 
       router.replace({
         pathname: "/login",
         params: { motivo: "sessao-expirada" },
       });
     });
-  }, []);
+
+    return () => setUnauthorizedHandler(null);
+  }, [limparSessaoLocal]);
 
   const sessaoValida = useCallback(async () => {
     try {
@@ -241,11 +251,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!user) return;
 
-    sessaoValida();
+    void sessaoValida();
 
     const assinatura = AppState.addEventListener("change", (estado) => {
       if (estado === "active") {
-        sessaoValida();
+        void sessaoValida();
       }
     });
 
@@ -267,11 +277,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const { user, token } = response.data;
 
-      setUser(user);
-
       await SecureStore.setItemAsync("user", JSON.stringify(user));
 
       await SecureStore.setItemAsync("token", token);
+      setUser(user);
+      logoutEmAndamento.current = false;
     } catch (error: any) {
       if (__DEV__ && error?.response?.status !== 422) {
         console.warn("Falha inesperada no cadastro:", error?.response?.status);
