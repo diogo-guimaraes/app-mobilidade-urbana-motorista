@@ -29,15 +29,32 @@ export default function ContadorEspera({
 
   useEffect(() => {
     const inicio = performance.now();
+    const segundosAteLimite = Math.max(
+      espera.tolerancia_segundos +
+        espera.limite_cobranca_segundos -
+        espera.segundos_decorridos,
+      0,
+    );
+
+    if (segundosAteLimite === 0) return;
+
     const intervalo = setInterval(() => {
-      setRelogio({
-        calculadoEm: espera.calculado_em,
-        segundos: (performance.now() - inicio) / 1000,
-      });
+      const segundos = Math.min(
+        (performance.now() - inicio) / 1000,
+        segundosAteLimite,
+      );
+      setRelogio({ calculadoEm: espera.calculado_em, segundos });
+
+      if (segundos >= segundosAteLimite) clearInterval(intervalo);
     }, 1000);
 
     return () => clearInterval(intervalo);
-  }, [espera.calculado_em]);
+  }, [
+    espera.calculado_em,
+    espera.limite_cobranca_segundos,
+    espera.segundos_decorridos,
+    espera.tolerancia_segundos,
+  ]);
 
   const segundosDesdeResumo =
     relogio.calculadoEm === espera.calculado_em ? relogio.segundos : 0;
