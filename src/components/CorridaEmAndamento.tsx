@@ -1,8 +1,12 @@
 import BotaoDeslizar from "@/components/BotaoDeslizar";
+import ContadorEspera from "@/components/common/ContadorEspera";
 import { Text } from "@/components/common/Texto";
+import { ResumoEspera } from "@/domain/contadorEspera";
 import { Feather, Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Image,
+  Alert,
   Linking,
   StyleSheet,
   TouchableOpacity,
@@ -14,6 +18,7 @@ export type AcaoCorrida = "cheguei" | "iniciar" | "finalizar";
 export interface PassageiroDaCorrida {
   nome: string;
   foto?: string | null;
+  foto_oculta?: boolean;
   telefone?: string | null;
   nota?: number | null;
   corridas?: number;
@@ -28,7 +33,9 @@ interface props {
   minutos?: number | null;
   distanciaKm?: number | null;
   ocupado?: boolean;
+  espera?: ResumoEspera | null;
   onAvancar: (acao: AcaoCorrida) => void;
+  onCancelarNaoComparecimento: () => void;
 }
 
 const PASSOS: Record<
@@ -73,8 +80,11 @@ export default function CorridaEmAndamento({
   minutos,
   distanciaKm,
   ocupado = false,
+  espera,
   onAvancar,
+  onCancelarNaoComparecimento,
 }: props) {
+  const insets = useSafeAreaInsets();
   const passo = PASSOS[status];
 
   if (!passo) return null;
@@ -89,7 +99,7 @@ export default function CorridaEmAndamento({
   };
 
   return (
-    <View style={styles.folha}>
+    <View style={[styles.folha, { paddingBottom: insets.bottom + 16 }]}>
       <View style={styles.puxador} />
 
       <View style={styles.linhaTopo}>
@@ -126,13 +136,42 @@ export default function CorridaEmAndamento({
         )}
       </View>
 
+      {status === "motorista_chegou" &&
+      espera !== null &&
+      espera !== undefined ? (
+        <ContadorEspera
+          espera={espera}
+          perspectiva="motorista"
+          onCancelarNaoComparecimento={() =>
+            Alert.alert(
+              "Confirmar ausência",
+              "O passageiro não apareceu? A corrida será cancelada e a tarifa base da categoria será registrada como taxa de cancelamento.",
+              [
+                { text: "Voltar", style: "cancel" },
+                {
+                  text: "Confirmar",
+                  style: "destructive",
+                  onPress: onCancelarNaoComparecimento,
+                },
+              ],
+            )
+          }
+        />
+      ) : null}
+
       <View style={styles.separador} />
 
       <View style={styles.linhaPassageiro}>
-        {passageiro?.foto ? (
+        {passageiro?.foto && !passageiro.foto_oculta ? (
           <Image source={{ uri: passageiro.foto }} style={styles.avatar} />
         ) : (
-          <View style={[styles.avatar, styles.avatarVazio]}>
+          <View
+            style={[
+              styles.avatar,
+              styles.avatarVazio,
+              passageiro?.foto_oculta && styles.avatarProtegido,
+            ]}
+          >
             <Feather name="user" size={20} color="#888" />
           </View>
         )}
@@ -143,6 +182,7 @@ export default function CorridaEmAndamento({
           </Text>
 
           <Text style={styles.passageiroApoio}>
+            {passageiro?.foto_oculta ? "Foto protegida até sua chegada · " : ""}
             {typeof passageiro?.nota === "number"
               ? `★ ${passageiro.nota.toFixed(2).replace(".", ",")} · `
               : ""}
@@ -180,7 +220,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 22,
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 30,
+    paddingBottom: 16,
     gap: 14,
     zIndex: 20,
   },
@@ -281,6 +321,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  avatarProtegido: { opacity: 0.55, backgroundColor: "#D8D8D8" },
 
   passageiroBloco: {
     flex: 1,

@@ -1,18 +1,17 @@
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useEffect, useRef, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useState } from "react";
 import { Text, TextInput } from "@/components/common/Texto";
 import {
   Animated,
   BackHandler,
   Dimensions,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
-import ListaRevisarMinhaTarifa from "./ListaRevisarMinhaTarifa";
 
 const { width } = Dimensions.get("window");
 
@@ -27,20 +26,10 @@ export default function CentralAjuda({
   onClose,
   duration = 200,
 }: props) {
-  const translateX = useRef(new Animated.Value(width)).current;
-  const overlayOpacity = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
+  const [translateX] = useState(() => new Animated.Value(width));
+  const [overlayOpacity] = useState(() => new Animated.Value(0));
   const [isMounted, setIsMounted] = useState(visible);
-  const [activeTab, setActiveTab] = useState("Corridas");
-
-  const tabs = ["Corridas", "Entrega", "Food", "Energia"];
-
-  const [visibleListaRevisarMinhaTarifa, setVisibleListaRevisarMinhaTarifa] =
-    useState(false);
-
-  const mostrarListaRevisarMinhaTarifa = () => {
-    setVisibleListaRevisarMinhaTarifa(true);
-  };
-
   useEffect(() => {
     const onBackPress = () => {
       if (visible) {
@@ -58,7 +47,7 @@ export default function CentralAjuda({
 
   useEffect(() => {
     if (visible) {
-      setIsMounted(true);
+      setTimeout(() => setIsMounted(true), 0);
       Animated.parallel([
         Animated.timing(translateX, {
           toValue: 0,
@@ -85,19 +74,18 @@ export default function CentralAjuda({
         }),
       ]).start(({ finished }) => finished && setIsMounted(false));
     }
-  }, [visible, duration]);
+  }, [visible, duration, translateX, overlayOpacity]);
 
   if (!isMounted) return null;
 
-  // ✅ AGORA ACEITA onPress
-  const renderTopic = (icon: any, title: string, onPress?: () => void) => (
-    <TouchableOpacity style={styles.topicItem} onPress={onPress}>
+  const renderTopic = (icon: any, title: string) => (
+    <View style={styles.topicItem}>
       <View style={styles.topicIconRow}>
         <Ionicons name={icon} size={22} color="#333" />
         <Text style={styles.topicText}>{title}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#ccc" />
-    </TouchableOpacity>
+      <Text style={styles.emBreve}>Em breve</Text>
+    </View>
   );
 
   return (
@@ -114,7 +102,12 @@ export default function CentralAjuda({
 
         <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
           {/* HEADER FIXO */}
-          <View style={styles.header}>
+          <View
+            style={[
+              styles.header,
+              { paddingTop: Math.max(insets.top + 12, 50) },
+            ]}
+          >
             <TouchableOpacity onPress={onClose} style={styles.backButton}>
               <Ionicons name="chevron-back" size={28} color="#333" />
             </TouchableOpacity>
@@ -129,12 +122,7 @@ export default function CentralAjuda({
             {/* BANNER SUPERIOR */}
             <View style={styles.bannerContainer}>
               <Text style={styles.bannerText}>Como podemos ajudar?</Text>
-              <Image
-                source={{
-                  uri: "https://cdn-icons-png.flaticon.com/512/4334/4334338.png",
-                }}
-                style={styles.bannerImage}
-              />
+              <Ionicons name="help-circle-outline" size={54} color="#FF7A45" />
             </View>
 
             {/* ABAS (TABS) */}
@@ -144,100 +132,15 @@ export default function CentralAjuda({
                 showsHorizontalScrollIndicator={false}
                 style={styles.tabsScroll}
               >
-                {tabs.map((tab) => (
-                  <TouchableOpacity
-                    key={tab}
-                    onPress={() => setActiveTab(tab)}
-                    style={[
-                      styles.tabItem,
-                      activeTab === tab && styles.tabItemActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.tabText,
-                        activeTab === tab && styles.tabTextActive,
-                      ]}
-                    >
-                      {tab}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                <View style={[styles.tabItem, styles.tabItemActive]}>
+                  <Text style={[styles.tabText, styles.tabTextActive]}>
+                    Corridas
+                  </Text>
+                </View>
               </ScrollView>
             </View>
 
             <View style={styles.contentPadding}>
-              {/* SEÇÃO ANDAMENTO */}
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Andamento</Text>
-                <Ionicons name="chevron-forward" size={16} color="#bbb" />
-              </View>
-
-              <View style={styles.cardAndamento}>
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardItemTitle}>
-                    Solicitar valor não pago
-                  </Text>
-                  <Text style={styles.cardDate}>26/11/2025</Text>
-                  <Ionicons name="chevron-forward" size={14} color="#ccc" />
-                </View>
-                <Text style={styles.cardSubtitle}>
-                  Compensação de R$23,08 recebida
-                </Text>
-              </View>
-
-              <View style={styles.cardAndamento}>
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardItemTitle}>
-                    Solicitar valor não pago
-                  </Text>
-                  <Text style={styles.cardDate}>25/11/2025</Text>
-                  <Ionicons name="chevron-forward" size={14} color="#ccc" />
-                </View>
-                <Text style={styles.cardSubtitle}>
-                  Esperando o passageiro responder
-                </Text>
-              </View>
-
-              {/* SEÇÃO CONCLUÍDA */}
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Concluída</Text>
-                <TouchableOpacity style={styles.selectTripRow}>
-                  <Text style={styles.selectTripText}>Selecione a corrida</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#bbb" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.cardConcluida}>
-                <View style={styles.tripHeader}>
-                  <Text style={styles.tripType}>
-                    Pop <Text style={styles.tripTime}>20 de fev 13:23</Text>
-                  </Text>
-                </View>
-                <View style={styles.addressRow}>
-                  <View style={[styles.dot, { backgroundColor: "#26d396" }]} />
-                  <Text style={styles.addressText} numberOfLines={1}>
-                    Avenida Vidabella, Planalto, Porto Velho - RO
-                  </Text>
-                </View>
-                <View style={styles.addressRow}>
-                  <View style={[styles.dot, { backgroundColor: "#ff7a45" }]} />
-                  <Text style={styles.addressText} numberOfLines={1}>
-                    Avenida Rio Madeira, Flodoaldo Pontes Pinto, P...
-                  </Text>
-                </View>
-                <View style={styles.lostItemRow}>
-                  <View style={styles.lostIconBG}>
-                    <MaterialCommunityIcons
-                      name="bag-checked"
-                      size={18}
-                      color="#26d396"
-                    />
-                  </View>
-                  <Text style={styles.lostText}>Passageiro perdeu um item</Text>
-                </View>
-              </View>
-
               {/* TODOS OS TÓPICOS */}
               <Text
                 style={[
@@ -261,13 +164,8 @@ export default function CentralAjuda({
                 {renderTopic(
                   "cash-outline",
                   "Revisar minha tarifa de pagamento",
-                  mostrarListaRevisarMinhaTarifa, // ✅ agora você define direto aqui
                 )}
-                {renderTopic(
-                  "location-outline",
-                  "Suporte com minhas corridas",
-                  () => console.log("Suporte corridas"),
-                )}
+                {renderTopic("location-outline", "Suporte com minhas corridas")}
                 {renderTopic("grid-outline", "Registro")}
                 {renderTopic(
                   "information-circle-outline",
@@ -280,11 +178,6 @@ export default function CentralAjuda({
           </ScrollView>
         </Animated.View>
       </View>
-
-      <ListaRevisarMinhaTarifa
-        visible={visibleListaRevisarMinhaTarifa}
-        onClose={() => setVisibleListaRevisarMinhaTarifa(false)}
-      />
     </>
   );
 }
@@ -302,6 +195,7 @@ const styles = StyleSheet.create({
   },
   backButton: { marginRight: 15 },
   headerTitle: { fontSize: 20, fontWeight: "700", color: "#333" },
+  emBreve: { color: "#999", fontSize: 12 },
 
   bannerContainer: {
     height: 100,

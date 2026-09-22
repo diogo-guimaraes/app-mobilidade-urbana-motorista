@@ -1,104 +1,67 @@
-import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef, useState } from "react";
 import { Text } from "@/components/common/Texto";
+import { OfertaCorrida } from "@/hooks/useDespachoMotorista";
+import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   BackHandler,
-  Dimensions,
   FlatList,
   Pressable,
   RefreshControl,
   StyleSheet,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const { width } = Dimensions.get("window");
-
-interface props {
+interface Props {
   visible: boolean;
+  disponivel: boolean;
+  carregando: boolean;
+  ofertas: OfertaCorrida[];
+  ocupado: boolean;
   onClose: () => void;
+  onAtualizar: () => void;
+  onAceitar: (corridaId: number) => void;
+  onRecusar: (corridaId: number) => void;
   duration?: number;
 }
 
+const emKm = (valor: number) => `${valor.toFixed(1).replace(".", ",")} km`;
+const emReais = (valor: number) => `R$ ${valor.toFixed(2).replace(".", ",")}`;
+
 export default function SolicitacoesCorrida({
   visible,
+  disponivel,
+  carregando,
+  ofertas,
+  ocupado,
   onClose,
-  duration = 300,
-}: props) {
-  const translateX = useRef(new Animated.Value(width)).current;
-  const overlayOpacity = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(1)).current; // 👈 controla o fade da lista
-
+  onAtualizar,
+  onAceitar,
+  onRecusar,
+  duration = 250,
+}: Props) {
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const [translateX] = useState(() => new Animated.Value(width));
+  const [overlayOpacity] = useState(() => new Animated.Value(0));
   const [isMounted, setIsMounted] = useState(visible);
-  const [refreshing, setRefreshing] = useState(false);
-  const [solicitacoes, setSolicitacoes] = useState(gerarSolicitacoes());
 
-  // 👉 Gera novas solicitações simuladas
-  function gerarSolicitacoes() {
-    const cores = ["#003F44", "#1E1E1E", "#111", "#024E54", "#1C1C1C"];
-    const valores = ["15,20", "16,10", "6,30", "18,50", "12,80"];
-    return Array.from({ length: 3 }).map((_, i) => ({
-      id: Math.random().toString(),
-      tipo: "Pop",
-      novo: true,
-      valor: `R$${valores[Math.floor(Math.random() * valores.length)]}`,
-      valorKm: `R$${(1.2 + Math.random() * 1.8).toFixed(2)}/km`,
-      estrelas: (4.8 + Math.random() * 0.2).toFixed(2),
-      corridas: Math.floor(Math.random() * 300),
-      perfil: "Perfil Essencial",
-      tempo: `${5 + Math.floor(Math.random() * 10)} min`,
-      distancia: `${(1 + Math.random() * 5).toFixed(1)} km`,
-      destino1: "Destino Aleatório 1",
-      tempo2: `${10 + Math.floor(Math.random() * 8)} min`,
-      distancia2: `${(3 + Math.random() * 6).toFixed(1)} km`,
-      destino2: "Destino Aleatório 2",
-      cor: cores[Math.floor(Math.random() * cores.length)],
-    }));
-  }
-
-  // 🔄 Atualiza a lista simulando novas corridas
-  const onRefresh = () => {
-    setRefreshing(true);
-
-    // Fade-out
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => {
-      // troca lista
-      setSolicitacoes(gerarSolicitacoes());
-
-      // Fade-in
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }).start(() => setRefreshing(false));
-    });
-  };
-
-  // 🔙 Botão voltar Android
   useEffect(() => {
-    const onBackPress = () => {
-      if (visible) {
-        onClose();
-        return true;
-      }
-      return false;
-    };
-    const subscription = BackHandler.addEventListener(
-      "hardwareBackPress",
-      onBackPress,
-    );
-    return () => subscription.remove();
+    const assinatura = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (!visible) return false;
+      onClose();
+      return true;
+    });
+    return () => assinatura.remove();
   }, [visible, onClose]);
 
-  // 🎬 Animações de entrada e saída do drawer
   useEffect(() => {
     if (visible) {
-      setIsMounted(true);
+      const montar = setTimeout(() => setIsMounted(true), 0);
       Animated.parallel([
         Animated.timing(translateX, {
           toValue: 0,
@@ -107,205 +70,281 @@ export default function SolicitacoesCorrida({
         }),
         Animated.timing(overlayOpacity, {
           toValue: 1,
-          duration: duration * 0.8,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(translateX, {
-          toValue: width,
           duration,
           useNativeDriver: true,
         }),
-        Animated.timing(overlayOpacity, {
-          toValue: 0,
-          duration: duration * 0.8,
-          useNativeDriver: true,
-        }),
-      ]).start(({ finished }) => {
-        if (finished) setIsMounted(false);
-      });
+      ]).start();
+      onAtualizar();
+      return () => clearTimeout(montar);
     }
-  }, [visible]);
+
+    Animated.parallel([
+      Animated.timing(translateX, {
+        toValue: width,
+        duration,
+        useNativeDriver: true,
+      }),
+      Animated.timing(overlayOpacity, {
+        toValue: 0,
+        duration,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => finished && setIsMounted(false));
+  }, [duration, onAtualizar, overlayOpacity, translateX, visible, width]);
 
   if (!isMounted) return null;
 
   return (
-    <View style={[StyleSheet.absoluteFill, { zIndex: 30 }]}>
-      {/* Fundo escuro */}
+    <View style={[StyleSheet.absoluteFill, styles.camada]}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: "rgba(0,0,0,0.25)", opacity: overlayOpacity },
+            styles.fundo,
+            { opacity: overlayOpacity },
           ]}
         />
       </Pressable>
 
-      {/* Drawer */}
       <Animated.View
         style={[
           styles.drawer,
           {
+            paddingTop: Math.max(insets.top + 12, 28),
             transform: [{ translateX }],
-            zIndex: 31,
           },
         ]}
       >
-        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar solicitações"
+          >
             <Ionicons name="arrow-back-outline" size={28} color="#111" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Solicitações</Text>
-          <View style={{ width: 28 }} />
+          <View style={styles.headerTextos}>
+            <Text style={styles.headerTitle}>Solicitações</Text>
+            <Text style={styles.headerApoio}>
+              {disponivel
+                ? `${ofertas.length} na sua região`
+                : "Fique online para receber corridas"}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={onAtualizar}
+            disabled={carregando || !disponivel}
+          >
+            <Ionicons
+              name="refresh"
+              size={25}
+              color={disponivel ? "#111" : "#AAA"}
+            />
+          </TouchableOpacity>
         </View>
 
-        {/* Lista animada */}
-        <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-          <FlatList
-            data={solicitacoes}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={[styles.card, { backgroundColor: item.cor }]}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.tipoContainer}>
-                    <Text style={styles.tipoText}>{item.tipo}</Text>
-                    {item.novo && <Text style={styles.novoBadge}>Novo</Text>}
-                  </View>
-                  <Ionicons
-                    name="document-text-outline"
-                    size={20}
-                    color="#fff"
-                  />
+        <FlatList
+          data={ofertas}
+          keyExtractor={(item) => String(item.corrida_id)}
+          contentContainerStyle={
+            ofertas.length === 0 ? styles.listaVazia : styles.lista
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={carregando}
+              onRefresh={onAtualizar}
+              enabled={disponivel}
+              colors={["#FFB800"]}
+              tintColor="#FFB800"
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.vazio}>
+              {carregando ? (
+                <ActivityIndicator size="large" color="#FFB800" />
+              ) : (
+                <Ionicons name="car-outline" size={46} color="#AAA" />
+              )}
+              <Text style={styles.vazioTitulo}>
+                {disponivel
+                  ? "Nenhuma solicitação próxima"
+                  : "Você está offline"}
+              </Text>
+              <Text style={styles.vazioTexto}>
+                {disponivel
+                  ? "A lista atualiza automaticamente conforme o raio de busca aumenta."
+                  : "Feche esta tela e toque em Conectar."}
+              </Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.codigo}>{item.codigo_corrida}</Text>
+                <View style={styles.cardValor}>
+                  {item.recusada_localmente ? (
+                    <Text style={styles.recusadaSelo}>Recusada</Text>
+                  ) : null}
+                  <Text style={styles.valor}>
+                    {emReais(item.valor_motorista)}
+                  </Text>
                 </View>
-
-                <View style={styles.valorContainer}>
-                  <Text style={styles.valor}>{item.valor}</Text>
-                  <Text style={styles.valorKm}>{item.valorKm}</Text>
-                </View>
-
-                <Text style={styles.info}>
-                  ⭐ {item.estrelas} · {item.corridas} corridas · {item.perfil}
+              </View>
+              <Text style={styles.resumo}>
+                {emKm(item.distancia_ate_origem_km)} até o embarque ·{" "}
+                {emKm(item.distancia_corrida_km)} de viagem
+              </Text>
+              <View style={styles.enderecoLinha}>
+                <View style={[styles.ponto, styles.origem]} />
+                <Text style={styles.endereco} numberOfLines={2}>
+                  {item.origem}
                 </Text>
-
-                <View style={{ marginTop: 8 }}>
-                  <Text style={styles.destino}>
-                    🕒 {item.tempo} ({item.distancia}) {item.destino1}
+              </View>
+              <View style={styles.enderecoLinha}>
+                <View style={[styles.ponto, styles.destino]} />
+                <Text style={styles.endereco} numberOfLines={2}>
+                  {item.destino ?? "Destino não informado"}
+                </Text>
+              </View>
+              <Text style={styles.reputacao}>
+                {typeof item.passageiro_nota === "number"
+                  ? `★ ${item.passageiro_nota.toFixed(2)} · `
+                  : ""}
+                {item.passageiro_corridas === 0
+                  ? "Primeira corrida"
+                  : `${item.passageiro_corridas} corridas`}
+                {item.paradas > 0 ? ` · ${item.paradas} parada(s)` : ""}
+              </Text>
+              <View style={styles.acoes}>
+                {!item.recusada_localmente ? (
+                  <TouchableOpacity
+                    style={styles.recusar}
+                    disabled={ocupado}
+                    onPress={() => onRecusar(item.corrida_id)}
+                  >
+                    <Text style={styles.recusarTexto}>Recusar</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  style={styles.aceitar}
+                  disabled={ocupado}
+                  onPress={() => onAceitar(item.corrida_id)}
+                >
+                  <Text style={styles.aceitarTexto}>
+                    {ocupado
+                      ? "Aguarde..."
+                      : item.recusada_localmente
+                        ? "Aceitar agora"
+                        : "Aceitar"}
                   </Text>
-                  <Text style={styles.destino}>
-                    🕒 {item.tempo2} ({item.distancia2}) {item.destino2}
-                  </Text>
-                </View>
-
-                <TouchableOpacity style={styles.escolherButton}>
-                  <Text style={styles.escolherText}>Escolher</Text>
                 </TouchableOpacity>
               </View>
-            )}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={["#FFD84D"]}
-                tintColor="#FFD84D"
-              />
-            }
-          />
-        </Animated.View>
+            </View>
+          )}
+        />
       </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  camada: { zIndex: 30 },
+  fundo: { backgroundColor: "rgba(0,0,0,0.28)" },
   drawer: {
     position: "absolute",
-    right: 0,
     top: 0,
+    right: 0,
     bottom: 0,
-    width: "100%",
-    backgroundColor: "#fff",
-    padding: 16,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
+    left: 0,
+    backgroundColor: "#F7F7F7",
+    paddingHorizontal: 16,
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 50,
-    marginBottom: 10,
+    paddingBottom: 14,
+    gap: 12,
   },
-  headerTitle: {
+  headerTextos: { flex: 1 },
+  headerTitle: { fontSize: 20, fontWeight: "700", color: "#111" },
+  headerApoio: { fontSize: 12, color: "#666", marginTop: 2 },
+  lista: { paddingBottom: 32 },
+  listaVazia: { flexGrow: 1 },
+  vazio: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 30,
+  },
+  vazioTitulo: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
+    marginTop: 14,
+    color: "#222",
+  },
+  vazioTexto: {
+    fontSize: 14,
+    color: "#777",
+    textAlign: "center",
+    marginTop: 6,
+    lineHeight: 20,
   },
   card: {
-    borderRadius: 12,
+    backgroundColor: "#FFF",
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 14,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  tipoContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  tipoText: {
-    color: "#00E0C6",
-    fontWeight: "700",
-  },
-  novoBadge: {
-    backgroundColor: "#00E0C6",
-    color: "#003F44",
-    paddingHorizontal: 6,
+  cardValor: { alignItems: "flex-end", gap: 3 },
+  recusadaSelo: {
+    color: "#9A5A00",
+    backgroundColor: "#FFF0CE",
+    borderRadius: 10,
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 6,
     fontSize: 11,
     fontWeight: "700",
   },
-  valorContainer: {
+  codigo: { color: "#666", fontSize: 12, fontWeight: "600" },
+  valor: { color: "#111", fontSize: 23, fontWeight: "800" },
+  resumo: { color: "#555", fontSize: 13, marginVertical: 12 },
+  enderecoLinha: {
     flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginTop: 8,
+  },
+  ponto: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
+  origem: { backgroundColor: "#17A673" },
+  destino: { backgroundColor: "#E53935" },
+  endereco: { flex: 1, fontSize: 14, lineHeight: 19, color: "#222" },
+  reputacao: { color: "#666", fontSize: 13, marginTop: 14 },
+  acoes: { flexDirection: "row", gap: 10, marginTop: 16 },
+  recusar: {
+    flex: 1,
     alignItems: "center",
-    marginTop: 10,
-    marginBottom: 4,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#DDD",
   },
-  valor: {
-    color: "#fff",
-    fontSize: 22,
-    fontWeight: "800",
-    marginRight: 8,
-  },
-  valorKm: {
-    color: "#A0FFA8",
-    fontWeight: "700",
-  },
-  info: {
-    color: "#A7A7A7",
-    fontSize: 13,
-  },
-  destino: {
-    color: "#D9D9D9",
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  escolherButton: {
-    backgroundColor: "#FFD84D",
-    paddingVertical: 10,
-    borderRadius: 8,
+  recusarTexto: { color: "#555", fontWeight: "700" },
+  aceitar: {
+    flex: 2,
     alignItems: "center",
-    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#FFD200",
   },
-  escolherText: {
-    color: "#000",
-    fontWeight: "700",
-    fontSize: 15,
-  },
+  aceitarTexto: { color: "#111", fontWeight: "800" },
 });

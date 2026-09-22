@@ -1,200 +1,210 @@
 import AppLogo from "@/components/common/AppLogo";
 import ErrorBanner from "@/components/common/ErrorBanner";
 import { Text, TextInput } from "@/components/common/Texto";
-import { api } from "@/Services/api";
+import { useAuth } from "@/context/AuthProvider";
 import { useEspacoDoTeclado } from "@/hooks/useEspacoDoTeclado";
-import { Feather } from "@expo/vector-icons";
-import type { AxiosError } from "axios";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BackHandler,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../context/AuthProvider";
-
-const PASSO_FINAL = 6;
-
-const paraIso = (texto: string) => {
-  const partes = texto.replace(/\D/g, "");
-
-  if (partes.length !== 8) return null;
-
-  const dia = partes.slice(0, 2);
-  const mes = partes.slice(2, 4);
-  const ano = partes.slice(4);
-
-  const data = new Date(`${ano}-${mes}-${dia}T00:00:00`);
-
-  if (Number.isNaN(data.getTime())) return null;
-
-  return `${ano}-${mes}-${dia}`;
-};
-
-const temIdadeMinima = (iso: string) => {
-  const nascimento = new Date(`${iso}T00:00:00`);
-  const limite = new Date();
-
-  limite.setFullYear(limite.getFullYear() - 18);
-
-  return nascimento <= limite;
-};
-
-const formatarCPF = (texto: string) =>
-  texto
-    .replace(/\D/g, "")
-    .slice(0, 11)
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-
-const formatarValidadeCnh = (texto: string) =>
-  texto
-    .replace(/\D/g, "")
-    .slice(0, 8)
-    .replace(/(\d{2})(\d)/, "$1/$2")
-    .replace(/(\d{2})(\d)/, "$1/$2");
-
-const CATEGORIAS_CNH = ["A", "B", "AB", "C", "D", "E"];
-
-const formatarNascimento = (texto: string) =>
-  texto
-    .replace(/\D/g, "")
-    .slice(0, 8)
-    .replace(/(\d{2})(\d)/, "$1/$2")
-    .replace(/(\d{2})(\d)/, "$1/$2");
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function Cadastro() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { loginComToken } = useAuth();
-
+  const { register } = useAuth();
   const { telefone: telefoneParam } = useLocalSearchParams<{
     telefone?: string;
   }>();
-  const espacoDoTeclado = useEspacoDoTeclado();
-  const codigoOcultoRef = useRef<TextInput>(null);
 
   const [step, setStep] = useState(1);
+  const espacoDoTeclado = useEspacoDoTeclado();
 
+  // voltar tem que andar um passo de cada vez; só sai da tela no primeiro
+  // o passo 1 é o único sem voltar no rodapé, ao lado do Continuar
+
+  const voltarPasso = useCallback(() => {
+    if (step <= 1) {
+      router.back();
+      return;
+    }
+
+    setStep(step === 3 ? 1 : step - 1);
+  }, [step, router]);
+
+  useEffect(() => {
+    const inscricao = BackHandler.addEventListener("hardwareBackPress", () => {
+      voltarPasso();
+      return true;
+    });
+
+    return () => inscricao.remove();
+  }, [voltarPasso]);
+
+  // step 1
   const [email, setEmail] = useState("");
-  const [codigo, setCodigo] = useState("");
+  const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  // step 3
   const [senha, setSenha] = useState("");
-  const [confirmarSenha, setConfirmarSenha] = useState("");
-  const [nome, setNome] = useState("");
-  const [sobreNome, setsobreNome] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const senhaValida = senha.length >= 8;
+
+  // step 4
+  const [name, setName] = useState("");
+
+  // step 5
   const [cpf, setCpf] = useState("");
-  const [nascimento, setNascimento] = useState("");
-  const [cnhNumero, setCnhNumero] = useState("");
-  const [cnhCategoria, setCnhCategoria] = useState("");
-  const [cnhValidade, setCnhValidade] = useState("");
-  const [ear, setEar] = useState(false);
+  const [dataNascimento, setDataNascimento] = useState("");
+  const dataNascimentoRef = useRef<TextInput>(null);
+
+  // step 6
   const [concordo, setConcordo] = useState(false);
 
   const [enviando, setEnviando] = useState(false);
   const [erroCadastro, setErroCadastro] = useState("");
   const [erroEmailServidor, setErroEmailServidor] = useState("");
   const [erroCpfServidor, setErroCpfServidor] = useState("");
-  const [erroCnhServidor, setErroCnhServidor] = useState("");
+  const [erroSenhaServidor, setErroSenhaServidor] = useState("");
+  const [erroIdadeServidor, setErroIdadeServidor] = useState("");
 
-  const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const codigoValido = codigo.length === 4;
-  const senhasIguais = senha.length >= 8 && senha === confirmarSenha;
-  const cpfLimpo = cpf.replace(/\D/g, "");
-  const nascimentoIso = paraIso(nascimento);
-  const maiorDeIdade = nascimentoIso !== null && temIdadeMinima(nascimentoIso);
+  // valida se a data preenchida existe de verdade (dia/mês dentro do range e o mês tem esse dia)
+  const dataNascimentoValida = (valor: string) => {
+    if (valor.length !== 10) return false;
 
-  const cnhNumeroLimpo = cnhNumero.replace(/\D/g, "");
-  const cnhValidadeIso = paraIso(cnhValidade);
-  const cnhNaoVencida =
-    cnhValidadeIso !== null &&
-    new Date(`${cnhValidadeIso}T00:00:00`) > new Date();
+    const [dia, mes, ano] = valor.split("/").map(Number);
 
-  const cnhOk =
-    cnhNumeroLimpo.length >= 9 && cnhCategoria !== "" && cnhNaoVencida;
+    if (!dia || !mes || !ano) return false;
+    if (mes < 1 || mes > 12) return false;
 
-  const dadosPessoaisOk =
-    nome.trim().length > 0 &&
-    sobreNome.trim().length > 0 &&
-    cpfLimpo.length === 11 &&
-    maiorDeIdade;
+    const diasNoMes = new Date(ano, mes, 0).getDate();
+
+    if (dia < 1 || dia > diasNoMes) return false;
+
+    return ano >= 1900 && ano <= new Date().getFullYear();
+  };
+
+  // calcula a idade a partir de dd/mm/aaaa
+  const calcularIdade = (valor: string) => {
+    const [dia, mes, ano] = valor.split("/").map(Number);
+
+    const nascimento = new Date(ano, mes - 1, dia);
+    const hoje = new Date();
+
+    let idade = hoje.getFullYear() - nascimento.getFullYear();
+
+    const aindaNaoFezAniversario =
+      hoje.getMonth() < nascimento.getMonth() ||
+      (hoje.getMonth() === nascimento.getMonth() &&
+        hoje.getDate() < nascimento.getDate());
+
+    if (aindaNaoFezAniversario) idade--;
+
+    return idade;
+  };
+
+  const dataNascimentoFormatoValido = dataNascimentoValida(dataNascimento);
+  const maiorDeIdade =
+    dataNascimentoFormatoValido && calcularIdade(dataNascimento) >= 18;
+  const menorDeIdade = dataNascimentoFormatoValido && !maiorDeIdade;
+
+  const cpfValido = (valor: string) => {
+    const numeros = valor.replace(/\D/g, "");
+    if (numeros.length !== 11 || /^(\d)\1{10}$/.test(numeros)) return false;
+
+    const digito = (tamanho: number) => {
+      const soma = numeros
+        .slice(0, tamanho)
+        .split("")
+        .reduce(
+          (total, numero, indice) =>
+            total + Number(numero) * (tamanho + 1 - indice),
+          0,
+        );
+      const resto = (soma * 10) % 11;
+      return resto === 10 ? 0 : resto;
+    };
+
+    return (
+      digito(9) === Number(numeros[9]) && digito(10) === Number(numeros[10])
+    );
+  };
+
+  const cpfFormatoValido = cpfValido(cpf);
+  const cpfInvalido = cpf.length === 14 && !cpfFormatoValido;
+
+  // validação step 5
+  const step5Valido = cpfFormatoValido && maiorDeIdade;
+
+  // máscara CPF
+  const formatarCPF = (value: string) => {
+    const numeros = value.replace(/\D/g, "");
+
+    return numeros
+      .replace(/^(\d{3})(\d)/, "$1.$2")
+      .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/\.(\d{3})(\d)/, ".$1-$2")
+      .slice(0, 14);
+  };
+
+  // máscara data nascimento
+  const formatarDataNascimento = (value: string) => {
+    const numeros = value.replace(/\D/g, "");
+
+    return numeros
+      .replace(/^(\d{2})(\d)/, "$1/$2")
+      .replace(/^(\d{2})\/(\d{2})(\d)/, "$1/$2/$3")
+      .slice(0, 10);
+  };
 
   const finalizarCadastro = async () => {
     if (!concordo || enviando) return;
 
-    if (nascimentoIso === null || cpfLimpo.length !== 11) {
-      setErroCadastro("Confira o CPF e a data de nascimento.");
-      setStep(4);
-      return;
-    }
-
-    if (!cnhOk) {
-      setErroCnhServidor("Confira os dados da sua CNH.");
-      setStep(5);
-      return;
-    }
-
+    setEnviando(true);
     setErroCadastro("");
     setErroEmailServidor("");
     setErroCpfServidor("");
-    setErroCnhServidor("");
-    setEnviando(true);
+
+    // remove máscara do CPF
+    const cpfTratado = cpf.replace(/\D/g, "");
+
+    // converte 21/11/1992 => 1992-11-21
+    const [dia, mes, ano] = dataNascimento.split("/");
+
+    const dataNascimentoTratada = `${ano}-${mes}-${dia}`;
+
+    const usuario = {
+      email: email,
+      password: senha,
+      name: name,
+      cpf: cpfTratado,
+      data_nascimento: dataNascimentoTratada,
+      ...(telefoneParam ? { telefone: telefoneParam } : {}),
+    };
 
     try {
-      const { data } = await api.post<{
-        token: string;
-        user: { id: number; name: string; email: string };
-      }>("/auth/register", {
-        name: `${nome} ${sobreNome}`.trim(),
-        email,
-        password: senha,
-        cpf: cpfLimpo,
-        data_nascimento: nascimentoIso,
-        ...(telefoneParam ? { telefone: telefoneParam } : {}),
-        perfil: "motorista",
-        cnh_numero: cnhNumeroLimpo,
-        cnh_categoria: cnhCategoria,
-        cnh_expiracao: cnhValidadeIso,
-        ear,
-      });
+      await register(usuario);
 
-      await loginComToken(data.user, data.token);
-
-      router.replace("/home");
-    } catch (falha) {
-      const resposta = (
-        falha as AxiosError<{
-          message?: string;
-          errors?: Record<string, string[]>;
-        }>
-      )?.response;
-
-      const erros = resposta?.data?.errors;
-
-      if (erros?.email) {
-        setErroEmailServidor(erros.email[0] ?? "E-mail já cadastrado.");
-        setStep(1);
-        return;
-      }
+      // a conta nasce pendente: quem libera é a análise no painel de gestão
+      router.replace("/liberacao");
+    } catch (error: any) {
+      const erros = error?.response?.data?.errors;
 
       if (erros?.cpf) {
-        setErroCpfServidor(erros.cpf[0] ?? "CPF já cadastrado.");
-        setStep(4);
-        return;
-      }
+        setErroCpfServidor(
+          Array.isArray(erros.cpf) ? erros.cpf[0] : "CPF já cadastrado.",
+        );
 
-      const erroDeCnh =
-        erros?.cnh_numero ?? erros?.cnh_categoria ?? erros?.cnh_expiracao;
-
-      if (erroDeCnh) {
-        setErroCnhServidor(erroDeCnh[0] ?? "Confira os dados da sua CNH.");
         setStep(5);
+
         return;
       }
 
@@ -202,32 +212,60 @@ export default function Cadastro() {
         setErroCadastro(
           "Já existe uma conta com esse telefone. Volte e entre com ele.",
         );
+
         return;
       }
 
-      if (resposta?.status === 429) {
-        setErroCadastro(
-          "Muitas tentativas. Aguarde um minuto e tente de novo.",
+      if (erros?.email) {
+        setErroEmailServidor(
+          Array.isArray(erros.email) ? erros.email[0] : "E-mail já cadastrado.",
         );
+
+        setStep(1);
+
         return;
       }
 
-      setErroCadastro(
-        Object.values(erros ?? {})[0]?.[0] ??
-          resposta?.data?.message ??
-          "Não foi possível concluir o cadastro.",
-      );
+      if (erros?.password) {
+        setErroSenhaServidor(
+          Array.isArray(erros.password) ? erros.password[0] : "Senha inválida.",
+        );
+
+        setStep(3);
+
+        return;
+      }
+
+      // idade reprovada no servidor -> mostra na própria etapa da data de nascimento
+      if (erros?.data_nascimento) {
+        setErroIdadeServidor(
+          Array.isArray(erros.data_nascimento)
+            ? erros.data_nascimento[0]
+            : "Data de nascimento inválida.",
+        );
+
+        setStep(5);
+
+        return;
+      }
+
+      const mensagem =
+        error?.response?.data?.message ??
+        "Não foi possível concluir o cadastro. Tente novamente.";
+
+      setErroCadastro(mensagem);
     } finally {
       setEnviando(false);
     }
   };
 
+  const PASSO_FINAL = 6;
+
   const podeAvancarPorPasso: Record<number, boolean> = {
     1: emailValido,
-    2: codigoValido,
-    3: senhasIguais,
-    4: dadosPessoaisOk,
-    5: cnhOk,
+    3: senhaValida,
+    4: Boolean(name.trim()),
+    5: step5Valido,
     6: concordo,
   };
 
@@ -243,55 +281,40 @@ export default function Cadastro() {
       return;
     }
 
-    setStep(step + 1);
+    setStep(step === 1 ? 3 : step + 1);
   };
 
-  const voltarPasso = useCallback(() => {
-    if (step <= 1) {
-      router.back();
-      return;
-    }
-
-    setStep(step - 1);
-  }, [step, router]);
-
-  useEffect(() => {
-    const inscricao = BackHandler.addEventListener("hardwareBackPress", () => {
-      voltarPasso();
-      return true;
-    });
-
-    return () => inscricao.remove();
-  }, [voltarPasso]);
-
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.container}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.container}
+    >
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+        {/* HEADER */}
+        <View
+          style={[styles.header, { paddingTop: Math.max(insets.top + 12, 56) }]}
         >
-          <View style={styles.header}>
-            <AppLogo />
-
-            <View style={styles.badgeContainer}>
-              <Text style={styles.badgeText}>🚗 Cadastro de motorista</Text>
-            </View>
+          <AppLogo />
+          <View style={styles.badgeContainer}>
+            <Text style={styles.badgeText}>🚗 Área do Motorista</Text>
           </View>
+        </View>
 
-          <View style={styles.content}>
-            {step === 1 && (
-              <View style={styles.stepContainer}>
+        <View style={styles.content}>
+          {/* STEP 1 */}
+          {step === 1 && (
+            <View style={styles.stepContainer}>
+              <View>
                 <Text style={styles.title}>Qual é o seu e-mail?</Text>
 
                 <View
                   style={[
                     styles.inputWrapper,
-                    erroEmailServidor ? styles.inputWrapperError : null,
+                    erroEmailServidor && styles.inputWrapperError,
                   ]}
                 >
                   <TextInput
@@ -308,6 +331,8 @@ export default function Cadastro() {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    returnKeyType={emailValido ? "go" : "done"}
+                    onSubmitEditing={() => emailValido && setStep(3)}
                   />
                 </View>
                 <View style={styles.inputUnderline} />
@@ -316,423 +341,260 @@ export default function Cadastro() {
                   <ErrorBanner message={erroEmailServidor} />
                 ) : null}
               </View>
-            )}
 
-            {step === 2 && (
-              <View style={styles.stepContainer}>
-                <Text style={styles.title}>
-                  Digite o código de 4 dígitos enviado para:
-                </Text>
-
-                <Text style={styles.destaque}>{email}</Text>
-
-                <TextInput
-                  ref={codigoOcultoRef}
-                  autoFocus
-                  value={codigo}
-                  onChangeText={(texto) =>
-                    setCodigo(texto.replace(/[^0-9]/g, "").slice(0, 4))
-                  }
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  caretHidden
-                  contextMenuHidden
-                  style={styles.codigoOculto}
-                />
-
-                <Pressable
-                  style={styles.codigoGrade}
-                  onPress={() => {
-                    codigoOcultoRef.current?.blur();
-
-                    setTimeout(() => codigoOcultoRef.current?.focus(), 50);
-                  }}
+              <View>
+                <TouchableOpacity
+                  style={styles.loginButton}
+                  onPress={() => router.push("/login")}
                 >
-                  {[0, 1, 2, 3].map((posicao) => {
-                    const digito = codigo[posicao];
-                    const ativa =
-                      posicao === Math.min(codigo.length, 3) && !digito;
-
-                    return (
-                      <View key={posicao} style={styles.codigoCelula}>
-                        <View style={styles.codigoCaixa}>
-                          <Text
-                            style={[
-                              styles.codigoTexto,
-                              { color: digito ? "#000" : "#D9D9D9" },
-                            ]}
-                          >
-                            {digito || "0"}
-                          </Text>
-                        </View>
-
-                        <View
-                          style={[
-                            styles.codigoLinha,
-                            {
-                              backgroundColor:
-                                digito || ativa ? "#FF5500" : "#E5E5E5",
-                            },
-                          ]}
-                        />
-                      </View>
-                    );
-                  })}
-                </Pressable>
-
-                <Text style={styles.apoio}>
-                  Verifique a caixa de entrada e o spam.
-                </Text>
+                  <Text style={styles.loginText}>Já tem conta? Faça login</Text>
+                </TouchableOpacity>
               </View>
-            )}
+            </View>
+          )}
 
-            {step === 3 && (
-              <View style={styles.stepContainer}>
+          {/* STEP 3 */}
+          {step === 3 && (
+            <View style={styles.stepContainer}>
+              <View>
                 <Text style={styles.title}>Crie uma senha para sua conta</Text>
-
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    autoFocus
-                    placeholder="Senha (mínimo 8 caracteres)"
-                    placeholderTextColor="#CCC"
-                    style={styles.input}
-                    value={senha}
-                    onChangeText={setSenha}
-                    secureTextEntry
-                    autoCapitalize="none"
-                  />
-                </View>
-                <View style={styles.inputUnderline} />
-
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    placeholder="Confirme a senha"
-                    placeholderTextColor="#CCC"
-                    style={styles.input}
-                    value={confirmarSenha}
-                    onChangeText={setConfirmarSenha}
-                    secureTextEntry
-                    autoCapitalize="none"
-                  />
-                </View>
-                <View style={styles.inputUnderline} />
-
-                {confirmarSenha.length > 0 && !senhasIguais ? (
-                  <ErrorBanner message="As senhas precisam ser iguais e ter ao menos 8 caracteres." />
-                ) : null}
-              </View>
-            )}
-
-            {step === 4 && (
-              <View style={styles.stepContainer}>
-                <Text style={styles.title}>Seus dados</Text>
-
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    autoFocus
-                    placeholder="Primeiro nome"
-                    placeholderTextColor="#CCC"
-                    style={styles.input}
-                    value={nome}
-                    onChangeText={setNome}
-                  />
-                </View>
-                <View style={styles.inputUnderline} />
-
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    placeholder="Sobrenome"
-                    placeholderTextColor="#CCC"
-                    style={styles.input}
-                    value={sobreNome}
-                    onChangeText={setsobreNome}
-                  />
-                </View>
-                <View style={styles.inputUnderline} />
 
                 <View
                   style={[
                     styles.inputWrapper,
-                    erroCpfServidor ? styles.inputWrapperError : null,
+                    erroSenhaServidor && styles.inputWrapperError,
                   ]}
                 >
                   <TextInput
-                    placeholder="CPF"
+                    autoFocus
+                    placeholder="Senha"
                     placeholderTextColor="#CCC"
+                    secureTextEntry={!mostrarSenha}
+                    returnKeyType={senhaValida ? "go" : "done"}
+                    onSubmitEditing={() => senhaValida && setStep(4)}
                     style={styles.input}
+                    value={senha}
+                    onChangeText={(text) => {
+                      setSenha(text);
+
+                      if (erroSenhaServidor) setErroSenhaServidor("");
+                    }}
+                  />
+
+                  <TouchableOpacity
+                    onPress={() => setMostrarSenha((prev) => !prev)}
+                    hitSlop={8}
+                  >
+                    <Ionicons
+                      name={mostrarSenha ? "eye-off" : "eye"}
+                      size={20}
+                      color="#999"
+                    />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.inputUnderline} />
+
+                {erroSenhaServidor ? (
+                  <ErrorBanner message={erroSenhaServidor} />
+                ) : (
+                  <Text style={styles.smallTextSpacing}>
+                    Mínimo de 8 caracteres
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* STEP 4 */}
+          {step === 4 && (
+            <View style={styles.stepContainer}>
+              <View>
+                <Text style={styles.title}>Qual é o seu nome?</Text>
+
+                <Text style={styles.smallTextSpacing}>
+                  Informe como você quer que te chamem
+                </Text>
+
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    autoFocus
+                    placeholder="Informe seu nome completo"
+                    placeholderTextColor="#CCC"
+                    returnKeyType={name.trim() ? "go" : "done"}
+                    onSubmitEditing={() => name.trim() && setStep(5)}
+                    style={styles.input}
+                    value={name}
+                    onChangeText={setName}
+                  />
+                </View>
+                <View style={styles.inputUnderline} />
+              </View>
+            </View>
+          )}
+
+          {/* STEP 5 */}
+          {step === 5 && (
+            <View style={styles.stepContainer}>
+              <View>
+                <Text style={styles.title}>Qual seu CPF?</Text>
+
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    (erroCpfServidor || cpfInvalido) &&
+                      styles.inputWrapperError,
+                  ]}
+                >
+                  <TextInput
+                    autoFocus
+                    placeholder="Informe seu CPF"
+                    placeholderTextColor="#CCC"
+                    keyboardType="numeric"
+                    returnKeyType="next"
+                    onSubmitEditing={() => dataNascimentoRef.current?.focus()}
                     value={cpf}
-                    onChangeText={(texto) => {
+                    onChangeText={(text) => {
                       if (erroCpfServidor) setErroCpfServidor("");
 
-                      setCpf(formatarCPF(texto));
+                      setCpf(formatarCPF(text));
                     }}
-                    keyboardType="number-pad"
                     maxLength={14}
+                    style={styles.input}
                   />
                 </View>
                 <View style={styles.inputUnderline} />
 
                 {erroCpfServidor ? (
                   <ErrorBanner message={erroCpfServidor} />
+                ) : cpfInvalido ? (
+                  <ErrorBanner message="Informe um CPF válido." />
                 ) : null}
 
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    placeholder="Data de nascimento (DD/MM/AAAA)"
-                    placeholderTextColor="#CCC"
-                    style={styles.input}
-                    value={nascimento}
-                    onChangeText={(texto) =>
-                      setNascimento(formatarNascimento(texto))
-                    }
-                    keyboardType="number-pad"
-                    maxLength={10}
-                  />
-                </View>
-                <View style={styles.inputUnderline} />
+                <View style={styles.space} />
 
-                {nascimentoIso !== null && !maiorDeIdade ? (
-                  <ErrorBanner message="Você precisa ter pelo menos 18 anos para se cadastrar." />
-                ) : null}
-              </View>
-            )}
-
-            {step === 5 && (
-              <View style={styles.stepContainer}>
-                <Text style={styles.title}>Dados da sua CNH</Text>
-                <Text style={styles.apoio}>
-                  Precisamos deles para liberar você para dirigir
-                </Text>
+                <Text style={styles.title}>Qual sua data de nascimento?</Text>
 
                 <View
                   style={[
                     styles.inputWrapper,
-                    erroCnhServidor ? styles.inputWrapperError : null,
+                    (menorDeIdade || erroIdadeServidor) &&
+                      styles.inputWrapperError,
                   ]}
                 >
                   <TextInput
-                    autoFocus
-                    placeholder="Número de registro da CNH"
+                    ref={dataNascimentoRef}
+                    placeholder="00/00/0000"
                     placeholderTextColor="#CCC"
-                    style={styles.input}
-                    value={cnhNumero}
-                    onChangeText={(texto) => {
-                      if (erroCnhServidor) setErroCnhServidor("");
+                    keyboardType="numeric"
+                    returnKeyType={step5Valido ? "go" : "done"}
+                    onSubmitEditing={() => step5Valido && setStep(6)}
+                    value={dataNascimento}
+                    onChangeText={(text) => {
+                      setDataNascimento(formatarDataNascimento(text));
 
-                      setCnhNumero(texto.replace(/\D/g, "").slice(0, 11));
+                      if (erroIdadeServidor) setErroIdadeServidor("");
                     }}
-                    keyboardType="number-pad"
+                    maxLength={10}
+                    style={styles.input}
                   />
                 </View>
                 <View style={styles.inputUnderline} />
 
-                <Text style={styles.rotuloCampo}>Categoria</Text>
-
-                <View style={styles.categoriaLinha}>
-                  {CATEGORIAS_CNH.map((categoria) => {
-                    const escolhida = cnhCategoria === categoria;
-
-                    return (
-                      <TouchableOpacity
-                        key={categoria}
-                        style={[
-                          styles.categoria,
-                          escolhida ? styles.categoriaEscolhida : null,
-                        ]}
-                        onPress={() => {
-                          if (erroCnhServidor) setErroCnhServidor("");
-
-                          setCnhCategoria(categoria);
-                        }}
-                      >
-                        <Text
-                          style={[
-                            styles.categoriaTexto,
-                            escolhida ? styles.categoriaTextoEscolhido : null,
-                          ]}
-                        >
-                          {categoria}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    placeholder="Validade (DD/MM/AAAA)"
-                    placeholderTextColor="#CCC"
-                    style={styles.input}
-                    value={cnhValidade}
-                    onChangeText={(texto) => {
-                      if (erroCnhServidor) setErroCnhServidor("");
-
-                      setCnhValidade(formatarValidadeCnh(texto));
-                    }}
-                    keyboardType="number-pad"
-                  />
-                </View>
-                <View style={styles.inputUnderline} />
-
-                {cnhValidade.length === 10 && !cnhNaoVencida ? (
-                  <Text style={styles.aviso}>
-                    Essa data já passou. Informe uma CNH dentro da validade.
-                  </Text>
-                ) : null}
-
-                <TouchableOpacity
-                  style={styles.opcao}
-                  onPress={() => setEar((atual) => !atual)}
-                >
-                  <Text style={styles.opcaoTexto}>
-                    Minha CNH tem observação EAR
-                  </Text>
-
-                  {ear && <Feather name="check" size={20} color="#000" />}
-                </TouchableOpacity>
-
-                {erroCnhServidor ? (
-                  <ErrorBanner message={erroCnhServidor} />
+                {erroIdadeServidor ? (
+                  <ErrorBanner message={erroIdadeServidor} />
+                ) : menorDeIdade ? (
+                  <ErrorBanner message="Você precisa ter pelo menos 18 anos para se cadastrar." />
                 ) : null}
               </View>
-            )}
+            </View>
+          )}
 
-            {step === 6 && (
-              <View style={styles.stepContainer}>
-                <View style={styles.iconeTermos}>
-                  <Feather name="file-text" size={56} color="#000" />
+          {/* STEP 6 */}
+          {step === 6 && (
+            <View style={styles.stepContainer}>
+              <View>
+                <View style={styles.iconContainer}>
+                  <Feather name="file-text" size={54} color="black" />
                 </View>
 
-                <Text style={styles.title}>
-                  Aceite os Termos e o Aviso de Privacidade
-                </Text>
+                <Text style={styles.title}>Aceite os Termos e condições</Text>
 
-                <Text style={styles.textoTermos}>
+                <Text style={styles.description}>
                   Ao selecionar Concordo abaixo, confirmo que revisei e concordo
-                  com os Termos de uso e reconheço o Aviso de Privacidade. Eu
-                  tenho pelo menos 18 anos.
+                  com os <Text style={styles.link}>Termos de uso</Text> e
+                  reconheço o{" "}
+                  <Text style={styles.link}>Aviso de Privacidade</Text>.
                 </Text>
 
-                {erroCadastro.length > 0 ? (
-                  <ErrorBanner message={erroCadastro} />
-                ) : null}
-
-                <Pressable
-                  style={styles.linhaConcordo}
+                <TouchableOpacity
+                  style={styles.termsContainer}
                   onPress={() => setConcordo(!concordo)}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.concordoTexto}>Concordo</Text>
-
                   <View
                     style={[
-                      styles.caixaConcordo,
-                      concordo ? styles.caixaConcordoMarcada : null,
+                      styles.radioButton,
+                      concordo && styles.radioButtonActive,
                     ]}
                   >
                     {concordo && (
-                      <Feather name="check" size={16} color="#FFF" />
+                      <Ionicons name="checkmark" size={14} color="white" />
                     )}
                   </View>
-                </Pressable>
+
+                  <Text style={styles.termsText}>
+                    Li e aceito os{" "}
+                    <Text style={styles.linkText}>
+                      Termos de Uso e a Política de Privacidade
+                    </Text>
+                  </Text>
+                </TouchableOpacity>
+
+                {erroCadastro ? <ErrorBanner message={erroCadastro} /> : null}
               </View>
-            )}
-          </View>
-        </ScrollView>
+            </View>
+          )}
+        </View>
+      </ScrollView>
 
-        <View style={[styles.footer, { paddingBottom: 60 + espacoDoTeclado }]}>
-          <TouchableOpacity
-            style={styles.roundedButton}
-            onPress={voltarPasso}
-            disabled={enviando}
-          >
-            <Feather name="arrow-left" size={22} color="black" />
-          </TouchableOpacity>
+      <View style={[styles.footer, { paddingBottom: 80 + espacoDoTeclado }]}>
+        <TouchableOpacity
+          style={styles.roundedButton}
+          onPress={voltarPasso}
+          disabled={enviando}
+        >
+          <Feather name="arrow-left" size={22} color="black" />
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            disabled={!podeAvancar}
-            onPress={avancar}
+        <TouchableOpacity
+          disabled={!podeAvancar}
+          onPress={avancar}
+          style={[
+            styles.nextButtonSmall,
+            podeAvancar ? styles.nextButtonActive : styles.nextButtonDisabled,
+          ]}
+        >
+          <Text
             style={[
-              styles.nextButton,
-              podeAvancar ? styles.nextButtonActive : styles.nextButtonDisabled,
+              styles.nextButtonText,
+              !podeAvancar && styles.nextButtonTextDisabled,
             ]}
           >
-            <Text
-              style={[
-                styles.nextButtonText,
-                !podeAvancar && styles.nextButtonTextDisabled,
-              ]}
-            >
-              {rotuloAvancar}
-            </Text>
+            {rotuloAvancar}
+          </Text>
 
-            <Feather
-              name="arrow-right"
-              size={18}
-              color={podeAvancar ? "black" : "#CCC"}
-            />
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          <Feather
+            name="arrow-right"
+            size={18}
+            color={podeAvancar ? "black" : "#CCC"}
+          />
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  rotuloCampo: {
-    fontSize: 13,
-    color: "#666",
-    marginBottom: 10,
-  },
-
-  categoriaLinha: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 25,
-  },
-
-  categoria: {
-    minWidth: 54,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#E5E5E5",
-    alignItems: "center",
-  },
-
-  categoriaEscolhida: {
-    borderColor: "#FF5500",
-    backgroundColor: "#FFF3E0",
-  },
-
-  categoriaTexto: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#666",
-  },
-
-  categoriaTextoEscolhido: {
-    color: "#E65100",
-  },
-
-  aviso: {
-    fontSize: 13,
-    color: "#D32F2F",
-    marginBottom: 16,
-  },
-
-  container: { flex: 1, backgroundColor: "#FFF" },
-  scroll: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingBottom: 28 },
-  header: { alignItems: "center", paddingTop: 56, paddingHorizontal: 20 },
-  content: {
-    flexGrow: 1,
-    paddingHorizontal: 30,
-    marginTop: 20,
-    paddingBottom: 24,
-  },
-  stepContainer: { flexGrow: 1 },
   badgeContainer: {
     backgroundColor: "#FFF3E0",
     paddingHorizontal: 12,
@@ -740,97 +602,156 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginTop: 10,
   },
+
   badgeText: {
     color: "#E65100",
     fontSize: 12,
     fontWeight: "600",
   },
+
+  container: {
+    flex: 1,
+    backgroundColor: "#FFF",
+  },
+
+  scroll: {
+    flex: 1,
+  },
+
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 28,
+  },
+
+  header: {
+    alignItems: "center",
+    paddingTop: 56,
+    paddingHorizontal: 20,
+  },
+
+  backButton: {
+    position: "absolute",
+    left: 20,
+    top: 56,
+  },
+
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: 30,
+    marginTop: 20,
+    paddingBottom: 24,
+  },
+
+  stepContainer: {
+    flexGrow: 1,
+  },
+
   title: {
     fontSize: 22,
     fontWeight: "700",
     color: "#000",
     marginBottom: 12,
   },
-  destaque: {
+
+  highlightText: {
     fontSize: 16,
     fontWeight: "600",
+    marginBottom: 16,
     color: "#FF5500",
-    marginBottom: 16,
   },
-  apoio: {
-    fontSize: 13,
-    color: "#666",
-    marginBottom: 16,
-  },
+
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 10,
   },
-  inputWrapperError: { borderBottomWidth: 2, borderBottomColor: "#D32F2F" },
-  input: { flex: 1, fontSize: 18, color: "#000", fontWeight: "400" },
+
+  inputWrapperError: {
+    borderBottomWidth: 2,
+    borderBottomColor: "#D32F2F",
+  },
+
+  input: {
+    flex: 1,
+    fontSize: 18,
+    color: "#000",
+    fontWeight: "400",
+  },
+
   inputUnderline: {
     height: 1,
     backgroundColor: "#FF5500",
     width: "100%",
     marginBottom: 16,
   },
-  codigoOculto: { position: "absolute", opacity: 0, width: 20, height: 20 },
-  codigoGrade: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-    paddingHorizontal: 10,
-    marginBottom: 20,
-  },
-  codigoCelula: { alignItems: "center", width: "20%" },
-  codigoCaixa: {
+
+  nextButton: {
+    height: 55,
+    borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 8,
-    width: "100%",
+    marginBottom: 20,
   },
-  codigoTexto: { fontSize: 32, fontWeight: "400", textAlign: "center" },
-  codigoLinha: { height: 1.5, width: "100%" },
-  opcao: {
-    flexDirection: "row",
+
+  nextButtonSmall: {
+    height: 50,
+    borderRadius: 999,
+    justifyContent: "center",
     alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "#E5E5E5",
-    borderRadius: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    marginBottom: 12,
+    flexDirection: "row",
+    paddingHorizontal: 24,
   },
-  opcaoTexto: { fontSize: 16, color: "#333" },
-  iconeTermos: { alignItems: "center", marginBottom: 20 },
-  textoTermos: {
+
+  nextButtonDisabled: {
+    backgroundColor: "#F5F5F5",
+  },
+
+  nextButtonActive: {
+    backgroundColor: "#FFD200",
+  },
+
+  nextButtonText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#000",
+    marginRight: 8,
+  },
+
+  nextButtonTextDisabled: {
+    color: "#CCC",
+  },
+
+  loginButton: {
+    marginTop: 20,
+  },
+
+  loginText: {
+    textAlign: "center",
+    color: "#666",
     fontSize: 14,
-    color: "#555",
-    lineHeight: 20,
+    textDecorationLine: "underline",
+  },
+
+  smallText: {
+    fontSize: 13,
+    color: "#666",
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+
+  smallTextSpacing: {
+    fontSize: 13,
+    color: "#666",
     marginBottom: 20,
   },
-  linhaConcordo: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderTopWidth: 1,
-    borderTopColor: "#EEE",
-    paddingTop: 18,
-    marginTop: 4,
+
+  resendLink: {
+    color: "#000",
+    fontWeight: "600",
+    textDecorationLine: "underline",
+    textAlign: "center",
   },
-  concordoTexto: { fontSize: 16, color: "#000" },
-  caixaConcordo: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#BBB",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  caixaConcordoMarcada: { backgroundColor: "#000", borderColor: "#000" },
+
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -840,6 +761,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     backgroundColor: "#FFF",
   },
+
   roundedButton: {
     width: 50,
     height: 50,
@@ -848,21 +770,61 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  nextButton: {
-    height: 50,
-    borderRadius: 25,
-    flexDirection: "row",
+
+  space: {
+    marginBottom: 10,
+  },
+
+  iconContainer: {
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
+    marginBottom: 30,
   },
-  nextButtonActive: { backgroundColor: "#FFD200" },
-  nextButtonDisabled: { backgroundColor: "#F5F5F5" },
-  nextButtonText: {
-    fontSize: 16,
-    fontWeight: "700",
+
+  description: {
+    fontSize: 14,
+    color: "#666",
+    lineHeight: 22,
+    marginBottom: 30,
+  },
+
+  link: {
     color: "#000",
-    marginRight: 8,
+    fontWeight: "700",
+    textDecorationLine: "underline",
   },
-  nextButtonTextDisabled: { color: "#CCC" },
+
+  termsContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 40,
+  },
+
+  radioButton: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#CCC",
+    marginRight: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  radioButtonActive: {
+    backgroundColor: "#FF5500",
+    borderColor: "#FF5500",
+  },
+
+  termsText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#666",
+    lineHeight: 18,
+  },
+
+  linkText: {
+    textDecorationLine: "underline",
+    fontWeight: "600",
+    color: "#000",
+  },
 });

@@ -57,6 +57,7 @@ export default function AvaliarPassageiro({
     <View style={styles.sobreposicao}>
       <View style={[styles.cartao, { paddingBottom: insets.bottom + 20 }]}>
         <Text style={styles.titulo}>Corrida finalizada</Text>
+        <Text style={styles.codigo}>Corrida {corrida.codigo_corrida}</Text>
 
         {ganho !== null && (
           <>
@@ -125,7 +126,7 @@ export default function AvaliarPassageiro({
           disabled={enviando}
           onPress={onDispensar}
         >
-          <Text style={styles.textoPular}>Agora não</Text>
+          <Text style={styles.textoPular}>Lembrar depois</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -151,6 +152,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#111",
   },
+  codigo: { fontSize: 12, color: "#777", marginTop: 3 },
   ganho: {
     fontSize: 34,
     fontWeight: "800",
