@@ -21,6 +21,7 @@ export interface OfertaCorrida {
   paradas: number;
   passageiro_nota: number | null;
   passageiro_corridas: number;
+  recusada_localmente?: boolean;
 }
 
 export interface CorridaEmCurso {
@@ -79,6 +80,7 @@ export function useDespachoMotorista() {
   const [ocupado, setOcupado] = useState(false);
   const [socketAtivo, setSocketAtivo] = useState(false);
   const [gatilho, setGatilho] = useState(0);
+  const [appAtivo, setAppAtivo] = useState(AppState.currentState === "active");
 
   const recusadas = useRef<Set<number>>(new Set());
   const corridaRef = useRef<CorridaEmCurso | null>(null);
@@ -88,6 +90,7 @@ export function useDespachoMotorista() {
       const anterior = corridaRef.current;
 
       if (avisarEncerramento && anterior !== null && nova === null) {
+        setDisponivel(true);
         mostrarToast({
           tipo: "warning",
           titulo: "Corrida encerrada",
@@ -96,6 +99,8 @@ export function useDespachoMotorista() {
           chave: `corrida:${anterior.id}:encerrada-remotamente`,
         });
       }
+
+      if (nova !== null) setDisponivel(false);
 
       corridaRef.current = nova;
       setCorrida((atual) =>
@@ -177,7 +182,9 @@ export function useDespachoMotorista() {
     };
     const inicio = setTimeout(sincronizar, 0);
     const assinatura = AppState.addEventListener("change", (estado) => {
-      if (estado === "active") void sincronizar();
+      const ativo = estado === "active";
+      setAppAtivo(ativo);
+      if (ativo) void sincronizar();
     });
 
     return () => {
@@ -241,7 +248,7 @@ export function useDespachoMotorista() {
   );
 
   useEffect(() => {
-    if (!disponivel || corrida !== null) return;
+    if (!appAtivo || !disponivel || corrida !== null) return;
 
     let cancelado = false;
 
@@ -258,10 +265,11 @@ export function useDespachoMotorista() {
 
         if (cancelado) return;
 
-        const atuais = (data?.corridas ?? []).filter(
-          (item) => !recusadas.current.has(item.corrida_id),
-        );
-        const proxima = atuais[0];
+        const atuais = (data?.corridas ?? []).map((item) => ({
+          ...item,
+          recusada_localmente: recusadas.current.has(item.corrida_id),
+        }));
+        const proxima = atuais.find((item) => !item.recusada_localmente);
 
         setOfertas(atuais);
         setOferta(proxima ?? null);
@@ -290,13 +298,13 @@ export function useDespachoMotorista() {
       clearTimeout(buscaInicial);
       clearInterval(relogio);
     };
-  }, [disponivel, corrida, socketAtivo, gatilho]);
+  }, [appAtivo, disponivel, corrida, socketAtivo, gatilho]);
 
   // WebSocket em cima do polling: avisa que a lista mudou e o hook refaz a
   // consulta (o raio e a autorização seguem no servidor). Sem socket, o
   // intervalo normal de 5s continua valendo.
   useEffect(() => {
-    if (!disponivel || corrida !== null) {
+    if (!appAtivo || !disponivel || corrida !== null) {
       return;
     }
 
@@ -326,11 +334,11 @@ export function useDespachoMotorista() {
         }
       };
     } catch {}
-  }, [disponivel, corrida]);
+  }, [appAtivo, disponivel, corrida]);
 
   const corridaAtivaId = corrida?.id;
   useEffect(() => {
-    if (!disponivel && corridaAtivaId === undefined) return;
+    if (!appAtivo || (!disponivel && corridaAtivaId === undefined)) return;
 
     let cancelado = false;
 
@@ -374,7 +382,13 @@ export function useDespachoMotorista() {
       cancelado = true;
       clearInterval(relogio);
     };
-  }, [disponivel, corridaAtivaId, posicaoAtual, carregarCorridaAtual]);
+  }, [
+    appAtivo,
+    disponivel,
+    corridaAtivaId,
+    posicaoAtual,
+    carregarCorridaAtual,
+  ]);
 
   const aceitar = useCallback(
     async (corridaId?: number) => {
@@ -449,9 +463,11 @@ export function useDespachoMotorista() {
       const id = corridaId ?? oferta?.corrida_id;
       if (id !== undefined) recusadas.current.add(id);
 
-      const restantes = ofertas.filter((item) => item.corrida_id !== id);
-      setOfertas(restantes);
-      setOferta(restantes[0] ?? null);
+      const atualizadas = ofertas.map((item) =>
+        item.corrida_id === id ? { ...item, recusada_localmente: true } : item,
+      );
+      setOfertas(atualizadas);
+      setOferta(atualizadas.find((item) => !item.recusada_localmente) ?? null);
       mostrarToast({
         tipo: "info",
         titulo: "Solicitação recusada",
@@ -473,6 +489,23 @@ export function useDespachoMotorista() {
       setOcupado(true);
 
       try {
+        if (acao === "cheguei") {
+          const atual = await posicaoAtual();
+
+          if (atual === null) {
+            mostrarToast({
+              tipo: "warning",
+              titulo: "Localização necessária",
+              mensagem:
+                "Ative o GPS e permita o acesso à localização para informar sua chegada.",
+            });
+            return;
+          }
+
+          setPosicao(atual);
+          await api.post("/motorista/posicao", atual);
+        }
+
         const { data } = await api.post<CorridaEmCurso>(
           `/motorista/corridas/${corrida.id}/${acao}`,
         );
@@ -528,6 +561,7 @@ export function useDespachoMotorista() {
     },
     [
       corrida,
+      posicaoAtual,
       aplicarCorrida,
       mostrarToast,
       carregarCorridaAtual,

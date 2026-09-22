@@ -181,9 +181,14 @@ export default function SolicitacoesCorrida({
             <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <Text style={styles.codigo}>{item.codigo_corrida}</Text>
-                <Text style={styles.valor}>
-                  {emReais(item.valor_motorista)}
-                </Text>
+                <View style={styles.cardValor}>
+                  {item.recusada_localmente ? (
+                    <Text style={styles.recusadaSelo}>Recusada</Text>
+                  ) : null}
+                  <Text style={styles.valor}>
+                    {emReais(item.valor_motorista)}
+                  </Text>
+                </View>
               </View>
               <Text style={styles.resumo}>
                 {emKm(item.distancia_ate_origem_km)} até o embarque ·{" "}
@@ -211,20 +216,26 @@ export default function SolicitacoesCorrida({
                 {item.paradas > 0 ? ` · ${item.paradas} parada(s)` : ""}
               </Text>
               <View style={styles.acoes}>
-                <TouchableOpacity
-                  style={styles.recusar}
-                  disabled={ocupado}
-                  onPress={() => onRecusar(item.corrida_id)}
-                >
-                  <Text style={styles.recusarTexto}>Recusar</Text>
-                </TouchableOpacity>
+                {!item.recusada_localmente ? (
+                  <TouchableOpacity
+                    style={styles.recusar}
+                    disabled={ocupado}
+                    onPress={() => onRecusar(item.corrida_id)}
+                  >
+                    <Text style={styles.recusarTexto}>Recusar</Text>
+                  </TouchableOpacity>
+                ) : null}
                 <TouchableOpacity
                   style={styles.aceitar}
                   disabled={ocupado}
                   onPress={() => onAceitar(item.corrida_id)}
                 >
                   <Text style={styles.aceitarTexto}>
-                    {ocupado ? "Aguarde..." : "Aceitar"}
+                    {ocupado
+                      ? "Aguarde..."
+                      : item.recusada_localmente
+                        ? "Aceitar agora"
+                        : "Aceitar"}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -293,6 +304,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  cardValor: { alignItems: "flex-end", gap: 3 },
+  recusadaSelo: {
+    color: "#9A5A00",
+    backgroundColor: "#FFF0CE",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    fontSize: 11,
+    fontWeight: "700",
   },
   codigo: { color: "#666", fontSize: 12, fontWeight: "600" },
   valor: { color: "#111", fontSize: 23, fontWeight: "800" },
