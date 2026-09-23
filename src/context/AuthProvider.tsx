@@ -24,7 +24,7 @@ interface Usuario {
   email: string;
   name: string;
   telefone: string;
-  cpf: string;
+  cpf: string | null;
   data_nascimento: string;
   foto: string;
   foto_thumbnail: string;
@@ -38,7 +38,6 @@ interface AuthResponse {
 interface DadosCadastro {
   email: string;
   name: string;
-  cpf: string;
   data_nascimento: string;
   password: string;
   telefone?: string;
