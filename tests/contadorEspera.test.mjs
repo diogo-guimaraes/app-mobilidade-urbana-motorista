@@ -1,5 +1,3 @@
-// CODEX: 89 linhas criadas neste arquivo; valida tolerância, progressão, valores por perfil e teto do contador.
-
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -28,9 +26,8 @@ test("mostra a contagem regressiva durante os dois minutos gratuitos", () => {
 
   assert.deepEqual(contador, {
     fase: "tolerancia",
-    rotulo: "Tolerância gratuita",
-    tempo: "00:30",
-    apoio: "A cobrança começa depois de 2 minutos.",
+    tempo: "0:30",
+    apoio: "Por favor, aguarde. Taxa paga após a contagem.",
     valor: 0,
     segundosCobrados: 0,
   });
@@ -41,7 +38,7 @@ test("começa a cobrança proporcional depois da tolerância", () => {
   const passageiro = calcularContadorEspera(resumo, 120, "passageiro");
 
   assert.equal(motorista.fase, "cobrando");
-  assert.equal(motorista.tempo, "01:00");
+  assert.equal(motorista.tempo, "1:00");
   assert.equal(motorista.valor, 0.3);
   assert.equal(passageiro.valor, 0.33);
 });
@@ -58,8 +55,8 @@ test("limita o contador e a taxa a doze minutos cobrados", () => {
 });
 
 test("formata o relógio com minutos e segundos estáveis", () => {
-  assert.equal(formatarTempoEspera(0), "00:00");
-  assert.equal(formatarTempoEspera(5), "00:05");
-  assert.equal(formatarTempoEspera(125), "02:05");
+  assert.equal(formatarTempoEspera(0), "0:00");
+  assert.equal(formatarTempoEspera(5), "0:05");
+  assert.equal(formatarTempoEspera(125), "2:05");
   assert.equal(formatarTempoEspera(720), "12:00");
 });

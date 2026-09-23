@@ -103,6 +103,7 @@ export default function Liberacao() {
     erro,
     enviarCnh,
     enviarDocumento,
+    aprovarDev,
     recarregar,
   } = useCadastroMotorista();
 
@@ -204,6 +205,19 @@ export default function Liberacao() {
     if (saindo) return;
     setSaindo(true);
     await logout();
+  };
+
+  // atalho de desenvolvimento: pula CNH e documentos e aprova direto
+  const aprovarSemDocumentos = async () => {
+    if (enviando) return;
+    const sucesso = await aprovarDev();
+
+    if (sucesso) {
+      mostrarToast({
+        tipo: "success",
+        titulo: "Cadastro aprovado (atalho de desenvolvimento)",
+      });
+    }
   };
 
   if (carregando) {
@@ -401,6 +415,24 @@ export default function Liberacao() {
             {erroArquivo ? <ErrorBanner message={erroArquivo} /> : null}
             {erro.length > 0 ? <ErrorBanner message={erro} /> : null}
 
+            {__DEV__ && cadastro?.situacao !== "aprovado" && (
+              <TouchableOpacity
+                onPress={() => void aprovarSemDocumentos()}
+                disabled={enviando || saindo}
+                style={styles.testClickableContainer}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.testClickableText,
+                    (enviando || saindo) && styles.testClickableTextDisabled,
+                  ]}
+                >
+                  Pular e aprovar (dev)
+                </Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={styles.sair}
               onPress={() => void sairDaConta()}
@@ -546,7 +578,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   opcaoTexto: { fontSize: 16, color: "#333" },
-  sair: { marginTop: 24, paddingVertical: 12, alignItems: "center" },
+  testClickableContainer: {
+    marginTop: 24,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  testClickableText: {
+    fontSize: 13,
+    color: "#8A8A8A",
+    fontWeight: "500",
+    textDecorationLine: "underline",
+  },
+  testClickableTextDisabled: { color: "#A0A0A0" },
+  sair: { marginTop: 8, paddingVertical: 12, alignItems: "center" },
   sairTexto: { fontSize: 15, color: "#888", textDecorationLine: "underline" },
   footer: {
     paddingHorizontal: 30,

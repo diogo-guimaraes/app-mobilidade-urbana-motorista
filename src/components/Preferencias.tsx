@@ -6,16 +6,45 @@ import {
   Animated,
   BackHandler,
   Dimensions,
+  FlatList,
+  ListRenderItem,
   Pressable,
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
 import ConfigurarSolicitacoes from "./ConfigurarSolicitacoes";
+import DefinirDestino from "./DefinirDestino";
+import MetodosPagamento from "./MetodosPagamento";
 import PreferenciasNavegacao from "./PreferenciasNavegacao";
 import PreferenciasSomVoz from "./PreferenciasSomVoz";
 
 const { width } = Dimensions.get("window");
+
+interface AddressItem {
+  id: string;
+  address: string;
+  cityState: string;
+  icon: string;
+  iconColor: string;
+}
+
+const data: AddressItem[] = [
+  {
+    id: "1",
+    address: "Av. Paulista, 1000",
+    cityState: "São Paulo, SP",
+    icon: "home-outline",
+    iconColor: "orange",
+  },
+  {
+    id: "2",
+    address: "Rua das Flores, 45",
+    cityState: "Curitiba, PR",
+    icon: "time-outline",
+    iconColor: "#888",
+  },
+];
 
 interface props {
   visible: boolean;
@@ -36,13 +65,24 @@ export default function Preferencias({
   const [translateX] = useState(() => new Animated.Value(width));
   const [overlayOpacity] = useState(() => new Animated.Value(0));
   const [isMounted, setIsMounted] = useState(visible);
+  const [dialogDefinirDestinoVisible, setDialogDefinirDestinoVisible] =
+    useState(false);
   const [configurarSolicitacoesVisible, setConfigurarSolicitacoesVisible] =
     useState(false);
+  const [metodosPagamentoVisible, setMetodosPagamentoVisible] = useState(false);
   const [preferenciasNavegacao, setPreferenciasNavegacao] = useState(false);
   const [preferenciasSomVoz, setPreferenciasSomVoz] = useState(false);
 
+  const mostrarDedifnirDestino = () => {
+    setDialogDefinirDestinoVisible(true);
+  };
+
   const mostrarConfigurarSolicitacoes = () => {
     setConfigurarSolicitacoesVisible(true);
+  };
+
+  const mostrarMetodosPagamento = () => {
+    setMetodosPagamentoVisible(true);
   };
 
   const mostrarPreferenciasNavegacao = () => {
@@ -108,8 +148,64 @@ export default function Preferencias({
     onClose(); // fecha o drawer logo em seguida
   };
 
+  const renderItem: ListRenderItem<AddressItem> = ({ item, index }) => (
+    <TouchableOpacity style={[styles.addressItem]}>
+      <Ionicons
+        name={item.icon as any}
+        size={24}
+        color={item.iconColor}
+        style={styles.addressIcon}
+      />
+      <View
+        style={[
+          styles.addressContent,
+          index !== data.length - 1 && styles.addressContentSeparator,
+        ]}
+      >
+        <Text style={styles.addressLine1}>{item.address}</Text>
+        <Text style={styles.addressLine2}>{item.cityState}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <>
+      {dialogDefinirDestinoVisible && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 50,
+          }}
+        >
+          <DefinirDestino
+            visible={dialogDefinirDestinoVisible}
+            onClose={() => setDialogDefinirDestinoVisible(false)}
+          />
+        </View>
+      )}
+
+      {metodosPagamentoVisible && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 50,
+          }}
+        >
+          <MetodosPagamento
+            visible={metodosPagamentoVisible}
+            onClose={() => setMetodosPagamentoVisible(false)}
+          />
+        </View>
+      )}
+
       {/* 👉 Componente de destino com Z-INDEX maior */}
       {configurarSolicitacoesVisible && (
         <View
@@ -210,6 +306,43 @@ export default function Preferencias({
             {/* <Text style={styles.outerSectionTitle}>
               Destinos definidos
             </Text> */}
+            <View style={styles.cardGroup}>
+              {/* Primeiro botão: Definir meu destino */}
+              <TouchableOpacity
+                onPress={mostrarDedifnirDestino}
+                style={styles.cardButton}
+              >
+                <View style={styles.cardLeft}>
+                  <Ionicons
+                    name="navigate-circle-outline"
+                    size={26}
+                    color="#111"
+                    style={styles.icon}
+                  />
+                  <Text style={styles.cardText}>Definir meu destino</Text>
+                </View>
+                <Ionicons
+                  name="chevron-forward-outline"
+                  size={20}
+                  color="#aaa"
+                />
+              </TouchableOpacity>
+
+              {/* Título e Lista de Destinos Direcionados */}
+              {data.length > 0 && (
+                <View style={styles.addressListContainer}>
+                  <Text style={styles.addressListTitle}>Definidos</Text>
+
+                  <FlatList
+                    data={data}
+                    renderItem={renderItem}
+                    keyExtractor={(item) => item.id}
+                    scrollEnabled={false}
+                  />
+                </View>
+              )}
+            </View>
+
             {/* Card 2 - Assistente de ganhos */}
             <View style={styles.cardGroup}>
               {/* <Text style={styles.sectionTitle}>Assistente de ganhos</Text> */}
@@ -233,6 +366,29 @@ export default function Preferencias({
                   size={20}
                   color="#aaa"
                 />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={mostrarMetodosPagamento}
+                style={styles.cardButton}
+              >
+                <View style={styles.cardLeft}>
+                  <Ionicons
+                    name="cash-outline"
+                    size={26}
+                    color="#111"
+                    style={styles.icon}
+                  />
+                  <Text style={styles.cardText}>Métodos de pagamento</Text>
+                </View>
+                <View style={styles.rightGroup}>
+                  <View style={styles.redDot} />
+                  <Ionicons
+                    name="chevron-forward-outline"
+                    size={20}
+                    color="#aaa"
+                  />
+                </View>
               </TouchableOpacity>
 
               <TouchableOpacity

@@ -15,7 +15,6 @@ export interface ResumoEspera {
 
 export interface ContadorEspera {
   fase: "tolerancia" | "cobrando" | "limite";
-  rotulo: string;
   tempo: string;
   apoio: string;
   valor: number;
@@ -32,7 +31,8 @@ export const formatarTempoEspera = (segundos: number) => {
   const minutos = Math.floor(total / 60);
   const restante = total % 60;
 
-  return `${String(minutos).padStart(2, "0")}:${String(restante).padStart(2, "0")}`;
+  // sem zero à esquerda no minuto — mesmo formato do 99 real ("0:29")
+  return `${minutos}:${String(restante).padStart(2, "0")}`;
 };
 
 export function calcularContadorEspera(
@@ -65,9 +65,8 @@ export function calcularContadorEspera(
   if (toleranciaRestante > 0) {
     return {
       fase: "tolerancia",
-      rotulo: "Tolerância gratuita",
       tempo: formatarTempoEspera(toleranciaRestante),
-      apoio: "A cobrança começa depois de 2 minutos.",
+      apoio: "Por favor, aguarde. Taxa paga após a contagem.",
       valor: 0,
       segundosCobrados: 0,
     };
@@ -76,9 +75,8 @@ export function calcularContadorEspera(
   if (cobrados >= resumo.limite_cobranca_segundos) {
     return {
       fase: "limite",
-      rotulo: "Limite de espera atingido",
       tempo: formatarTempoEspera(resumo.limite_cobranca_segundos),
-      apoio: "A taxa não aumentará após 12 minutos cobrados.",
+      apoio: "Limite de 12 minutos atingido. A taxa não aumenta mais.",
       valor,
       segundosCobrados: cobrados,
     };
@@ -86,9 +84,8 @@ export function calcularContadorEspera(
 
   return {
     fase: "cobrando",
-    rotulo: "Tempo de espera cobrado",
     tempo: formatarTempoEspera(cobrados),
-    apoio: "Cobrança limitada a 12 minutos.",
+    apoio: "Tempo de espera sendo cobrado, limitado a 12 minutos.",
     valor,
     segundosCobrados: cobrados,
   };
