@@ -124,6 +124,26 @@ export function useCadastroMotorista() {
     [carregar],
   );
 
+  // atalho de desenvolvimento: pula CNH e documentos e aprova direto (ver
+  // MotoristaCadastroController::aprovarDev no backend)
+  const aprovarDev = useCallback(async () => {
+    setEnviando(true);
+    setErro("");
+
+    try {
+      await api.post("/motorista/cadastro/aprovar-dev");
+      await carregar();
+
+      return true;
+    } catch (falha) {
+      setErro(mensagemDoErro(falha, "Não foi possível aprovar o cadastro."));
+
+      return false;
+    } finally {
+      setEnviando(false);
+    }
+  }, [carregar]);
+
   return {
     cadastro,
     carregando,
@@ -131,6 +151,7 @@ export function useCadastroMotorista() {
     erro,
     enviarCnh,
     enviarDocumento,
+    aprovarDev,
     recarregar: carregar,
   };
 }

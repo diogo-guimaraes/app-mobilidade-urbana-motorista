@@ -1,6 +1,7 @@
 // app/home.tsx
 import AvaliarPassageiro from "@/components/AvaliarPassageiro";
 import CorridaEmAndamento from "@/components/CorridaEmAndamento";
+import NavegacaoAtiva from "@/components/NavegacaoAtiva";
 import FolhaInferiorMotorista from "@/components/FolhaInferiorMotorista";
 import GanhoDiario from "@/components/GanhoDiario";
 import Map from "@/components/Map";
@@ -188,12 +189,30 @@ export default function Home() {
         }
       />
 
-      {corrida !== null && (
+      {corrida !== null && corrida.status_corrida === "em_andamento" && (
+        <NavegacaoAtiva
+          codigoCorrida={corrida.codigo_corrida}
+          alvo={alvoDaCorrida}
+          enderecoAlvo={
+            corrida.corrida_destinos?.find((d) => d.tipo === "destino")
+              ?.endereco
+          }
+          passageiro={passageiro}
+          metodoPagamento={corrida.corrida_financeiro?.metodo_pagamento ?? null}
+          minutos={chegada?.minutos ?? null}
+          distanciaKm={chegada?.distancia_km ?? null}
+          ocupado={ocupado}
+          onAvancar={avancar}
+        />
+      )}
+
+      {corrida !== null && corrida.status_corrida !== "em_andamento" && (
         <CorridaEmAndamento
           status={corrida.status_corrida}
           codigoCorrida={corrida.codigo_corrida}
           origem={
-            corrida.corrida_destinos?.find((d) => d.tipo === "origem")?.endereco
+            corrida.corrida_destinos?.find((d) => d.tipo === "origem")
+              ?.endereco
           }
           destino={
             corrida.corrida_destinos?.find((d) => d.tipo === "destino")
@@ -239,7 +258,9 @@ export default function Home() {
         setVisible={setGanhoModalVisivel}
         corridaAtivaId={corrida?.id ?? null}
       />
-      <TopMenu onMenuPress={handleMenuOpen} />
+      {(corrida === null || corrida.status_corrida !== "em_andamento") && (
+        <TopMenu onMenuPress={handleMenuOpen} />
+      )}
 
       {/* Backdrop para SideMenu */}
       {menuVisible && (

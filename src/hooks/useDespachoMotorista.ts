@@ -34,6 +34,9 @@ export interface CorridaEmCurso {
     latitude: number | string | null;
     longitude: number | string | null;
   }[];
+  corrida_financeiro?: {
+    metodo_pagamento: string | null;
+  } | null;
 }
 
 export interface PassageiroDaCorrida {

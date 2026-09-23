@@ -1,8 +1,8 @@
 import BotaoDeslizar from "@/components/BotaoDeslizar";
-import ContadorEspera from "@/components/common/ContadorEspera";
 import { Text } from "@/components/common/Texto";
-import { ResumoEspera } from "@/domain/contadorEspera";
+import { ResumoEspera, calcularContadorEspera } from "@/domain/contadorEspera";
 import { Feather, Ionicons } from "@expo/vector-icons";
+import { useEffect, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Image,
@@ -87,10 +87,64 @@ export default function CorridaEmAndamento({
   const insets = useSafeAreaInsets();
   const passo = PASSOS[status];
 
+  const [relogio, setRelogio] = useState({
+    calculadoEm: espera?.calculado_em,
+    segundos: 0,
+  });
+
+  useEffect(() => {
+    if (!espera) return;
+
+    const inicio = performance.now();
+    const segundosAteLimite = Math.max(
+      espera.tolerancia_segundos +
+        espera.limite_cobranca_segundos -
+        espera.segundos_decorridos,
+      0,
+    );
+
+    if (segundosAteLimite === 0) return;
+
+    const intervalo = setInterval(() => {
+      const segundos = Math.min(
+        (performance.now() - inicio) / 1000,
+        segundosAteLimite,
+      );
+      setRelogio({ calculadoEm: espera.calculado_em, segundos });
+
+      if (segundos >= segundosAteLimite) clearInterval(intervalo);
+    }, 1000);
+
+    return () => clearInterval(intervalo);
+    // observa só os campos escalares: `espera` troca de referência a cada
+    // poll e reiniciar o relógio nesse intervalo faria o contador "pular"
+    // visivelmente
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    espera?.calculado_em,
+    espera?.limite_cobranca_segundos,
+    espera?.segundos_decorridos,
+    espera?.tolerancia_segundos,
+  ]);
+
   if (!passo) return null;
 
   const indoParaODestino = status === "em_andamento";
   const enderecoAlvo = indoParaODestino ? destino : origem;
+
+  const segundosDesdeResumo =
+    espera && relogio.calculadoEm === espera.calculado_em
+      ? relogio.segundos
+      : 0;
+  const contador = espera
+    ? calcularContadorEspera(espera, segundosDesdeResumo, "motorista")
+    : null;
+  const corContador =
+    contador?.fase === "tolerancia"
+      ? "#2F6BFF"
+      : contador?.fase === "limite"
+        ? "#DC2626"
+        : "#F59E0B";
 
   const ligar = () => {
     if (!passageiro?.telefone) return;
@@ -103,16 +157,24 @@ export default function CorridaEmAndamento({
       <View style={styles.puxador} />
 
       <View style={styles.linhaTopo}>
-        <View style={styles.selo}>
-          <Text style={styles.seloTexto}>
-            {typeof minutos === "number" ? `${minutos}` : "--"}
-          </Text>
-          <Text style={styles.seloUnidade}>min</Text>
-        </View>
+        {contador ? (
+          <View style={[styles.selo, { borderColor: corContador }]}>
+            <Text style={[styles.seloTexto, { color: corContador }]}>
+              {contador.tempo}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.selo}>
+            <Text style={styles.seloTexto}>
+              {typeof minutos === "number" ? `${minutos}` : "--"}
+            </Text>
+            <Text style={styles.seloUnidade}>min</Text>
+          </View>
+        )}
 
         <View style={styles.tituloBloco}>
           <Text style={styles.titulo}>{passo.titulo}</Text>
-          <Text style={styles.apoio}>{passo.apoio}</Text>
+          <Text style={styles.apoio}>{contador?.apoio ?? passo.apoio}</Text>
         </View>
 
         <Text style={styles.codigo}>{codigoCorrida}</Text>
@@ -136,13 +198,10 @@ export default function CorridaEmAndamento({
         )}
       </View>
 
-      {status === "motorista_chegou" &&
-      espera !== null &&
-      espera !== undefined ? (
-        <ContadorEspera
-          espera={espera}
-          perspectiva="motorista"
-          onCancelarNaoComparecimento={() =>
+      {status === "motorista_chegou" && espera ? (
+        <TouchableOpacity
+          disabled={espera.segundos_decorridos + segundosDesdeResumo < 180}
+          onPress={() =>
             Alert.alert(
               "Confirmar ausência",
               "O passageiro não apareceu? A corrida será cancelada e a tarifa base da categoria será registrada como taxa de cancelamento.",
@@ -156,7 +215,14 @@ export default function CorridaEmAndamento({
               ],
             )
           }
-        />
+          style={styles.botaoAusencia}
+        >
+          <Text style={styles.textoAusencia}>
+            {espera.segundos_decorridos + segundosDesdeResumo < 180
+              ? "Cancelamento por ausência após 3 minutos"
+              : "Passageiro não apareceu"}
+          </Text>
+        </TouchableOpacity>
       ) : null}
 
       <View style={styles.separador} />
@@ -279,6 +345,17 @@ const styles = StyleSheet.create({
   codigo: {
     fontSize: 11,
     color: "#AAA",
+  },
+
+  botaoAusencia: {
+    alignSelf: "center",
+  },
+
+  textoAusencia: {
+    color: "#C0392B",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
   },
 
   enderecoLinha: {

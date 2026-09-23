@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthProvider";
 import { useEspacoDoTeclado } from "@/hooks/useEspacoDoTeclado";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   BackHandler,
   KeyboardAvoidingView,
@@ -62,9 +62,7 @@ export default function Cadastro() {
   const [name, setName] = useState("");
 
   // step 5
-  const [cpf, setCpf] = useState("");
   const [dataNascimento, setDataNascimento] = useState("");
-  const dataNascimentoRef = useRef<TextInput>(null);
 
   // step 6
   const [concordo, setConcordo] = useState(false);
@@ -72,7 +70,6 @@ export default function Cadastro() {
   const [enviando, setEnviando] = useState(false);
   const [erroCadastro, setErroCadastro] = useState("");
   const [erroEmailServidor, setErroEmailServidor] = useState("");
-  const [erroCpfServidor, setErroCpfServidor] = useState("");
   const [erroSenhaServidor, setErroSenhaServidor] = useState("");
   const [erroIdadeServidor, setErroIdadeServidor] = useState("");
 
@@ -116,44 +113,8 @@ export default function Cadastro() {
     dataNascimentoFormatoValido && calcularIdade(dataNascimento) >= 18;
   const menorDeIdade = dataNascimentoFormatoValido && !maiorDeIdade;
 
-  const cpfValido = (valor: string) => {
-    const numeros = valor.replace(/\D/g, "");
-    if (numeros.length !== 11 || /^(\d)\1{10}$/.test(numeros)) return false;
-
-    const digito = (tamanho: number) => {
-      const soma = numeros
-        .slice(0, tamanho)
-        .split("")
-        .reduce(
-          (total, numero, indice) =>
-            total + Number(numero) * (tamanho + 1 - indice),
-          0,
-        );
-      const resto = (soma * 10) % 11;
-      return resto === 10 ? 0 : resto;
-    };
-
-    return (
-      digito(9) === Number(numeros[9]) && digito(10) === Number(numeros[10])
-    );
-  };
-
-  const cpfFormatoValido = cpfValido(cpf);
-  const cpfInvalido = cpf.length === 14 && !cpfFormatoValido;
-
   // validação step 5
-  const step5Valido = cpfFormatoValido && maiorDeIdade;
-
-  // máscara CPF
-  const formatarCPF = (value: string) => {
-    const numeros = value.replace(/\D/g, "");
-
-    return numeros
-      .replace(/^(\d{3})(\d)/, "$1.$2")
-      .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
-      .replace(/\.(\d{3})(\d)/, ".$1-$2")
-      .slice(0, 14);
-  };
+  const step5Valido = maiorDeIdade;
 
   // máscara data nascimento
   const formatarDataNascimento = (value: string) => {
@@ -171,10 +132,6 @@ export default function Cadastro() {
     setEnviando(true);
     setErroCadastro("");
     setErroEmailServidor("");
-    setErroCpfServidor("");
-
-    // remove máscara do CPF
-    const cpfTratado = cpf.replace(/\D/g, "");
 
     // converte 21/11/1992 => 1992-11-21
     const [dia, mes, ano] = dataNascimento.split("/");
@@ -185,7 +142,6 @@ export default function Cadastro() {
       email: email,
       password: senha,
       name: name,
-      cpf: cpfTratado,
       data_nascimento: dataNascimentoTratada,
       ...(telefoneParam ? { telefone: telefoneParam } : {}),
     };
@@ -197,16 +153,6 @@ export default function Cadastro() {
       router.replace("/liberacao");
     } catch (error: any) {
       const erros = error?.response?.data?.errors;
-
-      if (erros?.cpf) {
-        setErroCpfServidor(
-          Array.isArray(erros.cpf) ? erros.cpf[0] : "CPF já cadastrado.",
-        );
-
-        setStep(5);
-
-        return;
-      }
 
       if (erros?.telefone) {
         setErroCadastro(
@@ -436,42 +382,6 @@ export default function Cadastro() {
           {step === 5 && (
             <View style={styles.stepContainer}>
               <View>
-                <Text style={styles.title}>Qual seu CPF?</Text>
-
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    (erroCpfServidor || cpfInvalido) &&
-                      styles.inputWrapperError,
-                  ]}
-                >
-                  <TextInput
-                    autoFocus
-                    placeholder="Informe seu CPF"
-                    placeholderTextColor="#CCC"
-                    keyboardType="numeric"
-                    returnKeyType="next"
-                    onSubmitEditing={() => dataNascimentoRef.current?.focus()}
-                    value={cpf}
-                    onChangeText={(text) => {
-                      if (erroCpfServidor) setErroCpfServidor("");
-
-                      setCpf(formatarCPF(text));
-                    }}
-                    maxLength={14}
-                    style={styles.input}
-                  />
-                </View>
-                <View style={styles.inputUnderline} />
-
-                {erroCpfServidor ? (
-                  <ErrorBanner message={erroCpfServidor} />
-                ) : cpfInvalido ? (
-                  <ErrorBanner message="Informe um CPF válido." />
-                ) : null}
-
-                <View style={styles.space} />
-
                 <Text style={styles.title}>Qual sua data de nascimento?</Text>
 
                 <View
@@ -482,7 +392,7 @@ export default function Cadastro() {
                   ]}
                 >
                   <TextInput
-                    ref={dataNascimentoRef}
+                    autoFocus
                     placeholder="00/00/0000"
                     placeholderTextColor="#CCC"
                     keyboardType="numeric"
