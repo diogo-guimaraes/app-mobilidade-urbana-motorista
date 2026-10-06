@@ -10,6 +10,7 @@ interface GanhoDiarioProps {
   visible: boolean;
   setVisible: (visible: boolean) => void;
   corridaAtivaId: number | null;
+  ocultarAtalho?: boolean;
 }
 
 const valorNumerico = (valor: string) => {
@@ -25,6 +26,7 @@ export default function GanhoDiario({
   visible,
   setVisible,
   corridaAtivaId,
+  ocultarAtalho = false,
 }: GanhoDiarioProps) {
   const [mostrarValor, setMostrarValor] = useState(true);
   const { itens, carregando, erro, recarregar } = useHistoricoCorridas(true);
@@ -57,37 +59,41 @@ export default function GanhoDiario({
     <>
       <HistoricoCorridas visible={visible} onClose={() => setVisible(false)} />
 
-      <SafeAreaView style={styles.container} pointerEvents="box-none">
-        <View style={styles.valorButton}>
-          <TouchableOpacity
-            onPress={() => setMostrarValor((atual) => !atual)}
-            accessibilityRole="button"
-            accessibilityLabel={
-              mostrarValor ? "Ocultar ganhos de hoje" : "Mostrar ganhos de hoje"
-            }
-          >
-            <Ionicons
-              name={mostrarValor ? "eye" : "eye-off"}
-              size={19}
-              color="#fff"
-            />
-          </TouchableOpacity>
+      {!ocultarAtalho && (
+        <SafeAreaView style={styles.container} pointerEvents="box-none">
+          <View style={styles.valorButton}>
+            <TouchableOpacity
+              onPress={() => setMostrarValor((atual) => !atual)}
+              accessibilityRole="button"
+              accessibilityLabel={
+                mostrarValor
+                  ? "Ocultar ganhos de hoje"
+                  : "Mostrar ganhos de hoje"
+              }
+            >
+              <Ionicons
+                name={mostrarValor ? "eye" : "eye-off"}
+                size={19}
+                color="#fff"
+              />
+            </TouchableOpacity>
 
-          <View style={styles.separator} />
+            <View style={styles.separator} />
 
-          <TouchableOpacity
-            onPress={() => setVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Abrir histórico de corridas"
-          >
-            <Text style={styles.valorText}>
-              {mostrarValor ? (erro ? "Indisponível" : valor) : "••••••"}
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Abrir histórico de corridas"
+            >
+              <Text style={styles.valorText}>
+                {mostrarValor ? (erro ? "Indisponível" : valor) : "••••••"}
+              </Text>
+            </TouchableOpacity>
 
-          <Ionicons name="chevron-down" size={18} color="#fff" />
-        </View>
-      </SafeAreaView>
+            <Ionicons name="chevron-down" size={18} color="#fff" />
+          </View>
+        </SafeAreaView>
+      )}
     </>
   );
 }

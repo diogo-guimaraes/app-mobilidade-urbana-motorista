@@ -144,6 +144,11 @@ export default function Buscando() {
           accessible
           accessibilityRole="text"
           numberOfLines={1}
+          // "Você está online" não cabia entre os dois ícones em telas
+          // estreitas e virava "Você está o…": encolhe em vez de cortar
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+          maxFontSizeMultiplier={1.1}
         >
           {WORDS[index]}
         </Animated.Text>
@@ -183,6 +188,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   center: {
+    alignSelf: "stretch",
     alignItems: "center",
     paddingVertical: 4,
     paddingHorizontal: 12,

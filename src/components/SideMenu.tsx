@@ -1,4 +1,5 @@
 import { useAuth } from "@/context/AuthProvider";
+import { api } from "@/Services/api";
 import { AnimationConfig, useSlideAnimation } from "@/hooks/useSlideAnimation";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -92,6 +93,48 @@ export default function SideMenu({
   const closeMenu = useCallback(() => {
     closeAnimation(onClose);
   }, [closeAnimation, onClose]);
+
+  // veículo e números vêm da conta toda vez que o menu abre, para refletir
+  // um veículo cadastrado agora ou corridas finalizadas há pouco
+  const [veiculoPrincipal, setVeiculoPrincipal] = useState<string | null>(null);
+  const [estatisticas, setEstatisticas] = useState<{
+    taxa_aceitacao: number | null;
+    taxa_finalizacao: number | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+
+    let ativo = true;
+    Promise.all([
+      api.get<{ data: { marca?: string; modelo?: string; placa?: string }[] }>(
+        "/motorista/me/veiculos",
+      ),
+      api.get<{
+        taxa_aceitacao: number | null;
+        taxa_finalizacao: number | null;
+      }>("/motorista/me/estatisticas"),
+    ])
+      .then(([veiculos, numeros]) => {
+        if (!ativo) return;
+        const primeiro = veiculos.data.data?.[0];
+        setVeiculoPrincipal(
+          primeiro
+            ? [primeiro.marca, primeiro.modelo, primeiro.placa]
+                .filter(Boolean)
+                .join(" · ")
+            : null,
+        );
+        setEstatisticas(numeros.data);
+      })
+      .catch(() => {
+        // sem rede o menu segue abrindo; os campos ficam como estavam
+      });
+
+    return () => {
+      ativo = false;
+    };
+  }, [visible]);
 
   useEffect(() => {
     // Se o dialog estiver aberto, fecha
@@ -317,10 +360,16 @@ export default function SideMenu({
               {emCorrida ? "Em corrida" : disponivel ? "Online" : "Offline"}
             </Text>
 
-            <TouchableOpacity style={styles.statusBadge}>
+            <TouchableOpacity
+              style={styles.statusBadge}
+              accessibilityRole="button"
+              onPress={() => setShowMeusVeiculos(true)}
+            >
               <View style={styles.badgeContent}>
                 <Ionicons name="shield-checkmark" size={14} color="#FFF" />
-                <Text style={styles.statusText}>Carro · Fase 3</Text>
+                <Text style={styles.statusText}>
+                  {veiculoPrincipal ?? "Cadastrar veículo"}
+                </Text>
                 <Ionicons name="chevron-forward" size={14} color="#FFF" />
               </View>
               <View style={styles.notificationDot} />
@@ -328,12 +377,20 @@ export default function SideMenu({
 
             <View style={styles.statsRow}>
               <View style={styles.statBox}>
-                <Text style={styles.statValue}>48%</Text>
+                <Text style={styles.statValue}>
+                  {estatisticas?.taxa_aceitacao == null
+                    ? "—"
+                    : `${estatisticas.taxa_aceitacao}%`}
+                </Text>
                 <Text style={styles.statLabel}>Taxa de Aceitação</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statBox}>
-                <Text style={styles.statValue}>78%</Text>
+                <Text style={styles.statValue}>
+                  {estatisticas?.taxa_finalizacao == null
+                    ? "—"
+                    : `${estatisticas.taxa_finalizacao}%`}
+                </Text>
                 <Text style={styles.statLabel}>Taxa de Finalização</Text>
               </View>
             </View>

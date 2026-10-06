@@ -1,3 +1,4 @@
+// CODEX: 0 linhas alteradas; adapta formulário, teclado e rodapé às áreas seguras. Remover após validação ou commit.
 import CodigoVerificacao from "@/components/auth/CodigoVerificacao";
 import AppLogo from "@/components/common/AppLogo";
 import ErrorBanner from "@/components/common/ErrorBanner";
@@ -25,7 +26,7 @@ export default function Login() {
   const router = useRouter();
 
   const [phone, setPhone] = useState("");
-  const espacoDoTeclado = useEspacoDoTeclado();
+  const espacoDoTeclado = useEspacoDoTeclado(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showCodigoVerificacao, setShowCodigoVerificacao] = useState(false);
 
@@ -124,13 +125,9 @@ export default function Login() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
-          <View
-            style={[
-              styles.header,
-              { paddingTop: Math.max(insets.top + 12, 56) },
-            ]}
-          >
+          <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
             <AppLogo />
 
             <View style={styles.badgeContainer}>
@@ -226,7 +223,7 @@ export default function Login() {
           style={[
             styles.footer,
             {
-              paddingBottom: Math.max(insets.bottom + 12, 60) + espacoDoTeclado,
+              paddingBottom: Math.max(insets.bottom, 16) + espacoDoTeclado,
             },
           ]}
         >
@@ -303,6 +300,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   content: {
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
     flexGrow: 1,
     paddingHorizontal: 30,
     marginTop: 20,
@@ -382,6 +382,9 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
   footer: {
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
     paddingHorizontal: 30,
     paddingTop: 12,
     paddingBottom: 16,

@@ -1,3 +1,4 @@
+// CODEX: 0 linhas alteradas; remove espaço excessivo no rodapé da verificação. Remover após validação ou commit.
 import { api } from "@/Services/api";
 import AppLogo from "@/components/common/AppLogo";
 import ErrorBanner from "@/components/common/ErrorBanner";
@@ -389,8 +390,7 @@ export default function CodigoVerificacao({
             style={[
               styles.footer,
               {
-                paddingBottom:
-                  Math.max(insets.bottom + 12, 60) + espacoDoTeclado,
+                paddingBottom: Math.max(insets.bottom, 16) + espacoDoTeclado,
               },
             ]}
           >

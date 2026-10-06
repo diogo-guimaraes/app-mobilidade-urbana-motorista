@@ -1,7 +1,9 @@
+// CODEX: 33 linhas adicionadas e 11 removidas no diff atual; pausa rede e GPS durante a simulação local. Remover após validação/commit.
 import { api } from "@/Services/api";
 import { obterEcho } from "@/Services/echo";
 import { useToast } from "@/context/ToastContext";
 import { ResumoEspera } from "@/domain/contadorEspera";
+import { proximoPontoDaCorrida } from "@/domain/rotaDaCorrida";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
@@ -30,14 +32,38 @@ export interface CorridaEmCurso {
   status_corrida: string;
   corrida_destinos?: {
     tipo: string;
+    ordem?: number | null;
     endereco: string | null;
     latitude: number | string | null;
     longitude: number | string | null;
+    concluida_em?: string | null;
   }[];
   corrida_financeiro?: {
     metodo_pagamento: string | null;
   } | null;
+  produto?: { id: number; nome: string } | null;
+  metodo_pagamento?: string | null;
 }
+
+// pedido do passageiro para trocar o destino (backend: AlterarCorridaService)
+export interface PedidoNovoDestino {
+  id: number;
+  status: string;
+  // trajeto inteiro pedido (paradas e destino) quando o passageiro editou as paradas
+  paradas?: string[] | null;
+  endereco: string;
+  distancia_km: number;
+  tempo_min: number;
+  valor_motorista: number;
+  valor_motorista_anterior: number | null;
+  expira_em: string | null;
+}
+
+const ROTULO_PAGAMENTO: Record<string, string> = {
+  dinheiro: "dinheiro",
+  pix: "Pix",
+  cartao: "cartão",
+};
 
 export interface PassageiroDaCorrida {
   nome: string;
@@ -47,6 +73,12 @@ export interface PassageiroDaCorrida {
   nota: number | null;
   corridas: number;
 }
+
+// o cancelamento acontece dentro da tela Mais (um Modal), que cobre os
+// toasts: quem chama mostra a mensagem de erro ali mesmo
+export type ResultadoCancelamento =
+  | { ok: true }
+  | { ok: false; mensagem: string };
 
 export interface ChegadaEstimada {
   minutos: number;
@@ -61,7 +93,7 @@ const mensagemDoErro = (erro: unknown, padrao: string) => {
   return resposta?.data?.message ?? padrao;
 };
 
-export function useDespachoMotorista() {
+export function useDespachoMotorista(pausado = false) {
   const { mostrarToast } = useToast();
   const [disponivel, setDisponivel] = useState(false);
   const [oferta, setOferta] = useState<OfertaCorrida | null>(null);
@@ -70,6 +102,9 @@ export function useDespachoMotorista() {
   const [corrida, setCorrida] = useState<CorridaEmCurso | null>(null);
   const [chegada, setChegada] = useState<ChegadaEstimada | null>(null);
   const [espera, setEspera] = useState<ResumoEspera | null>(null);
+  const [pedidoNovoDestino, setPedidoNovoDestino] =
+    useState<PedidoNovoDestino | null>(null);
+  const [respondendoPedido, setRespondendoPedido] = useState(false);
   const [passageiro, setPassageiro] = useState<PassageiroDaCorrida | null>(
     null,
   );
@@ -105,6 +140,25 @@ export function useDespachoMotorista() {
 
       if (nova !== null) setDisponivel(false);
 
+      // o passageiro pode trocar a forma de pagamento uma vez por corrida
+      if (
+        anterior !== null &&
+        nova !== null &&
+        anterior.id === nova.id &&
+        anterior.metodo_pagamento &&
+        nova.metodo_pagamento &&
+        anterior.metodo_pagamento !== nova.metodo_pagamento
+      ) {
+        const rotulo =
+          ROTULO_PAGAMENTO[nova.metodo_pagamento] ?? nova.metodo_pagamento;
+        mostrarToast({
+          tipo: "info",
+          titulo: "Pagamento alterado",
+          mensagem: `O passageiro trocou para ${rotulo}.`,
+          chave: `pagamento:${nova.id}:${nova.metodo_pagamento}`,
+        });
+      }
+
       corridaRef.current = nova;
       setCorrida((atual) =>
         JSON.stringify(atual) === JSON.stringify(nova) ? atual : nova,
@@ -132,9 +186,20 @@ export function useDespachoMotorista() {
         chegada: ChegadaEstimada | null;
         passageiro: PassageiroDaCorrida | null;
         espera: ResumoEspera | null;
-      }>("/minha-corrida-atual", { timeout: 10000 });
+        alteracao_destino?: PedidoNovoDestino | null;
+      }>("/minha-corrida-atual", {
+        params: { perfil: "motorista" },
+        timeout: 10000,
+      });
 
       aplicarCorrida(data?.corrida ?? null);
+      const pedido =
+        data?.alteracao_destino?.status === "pendente"
+          ? data.alteracao_destino
+          : null;
+      setPedidoNovoDestino((anterior) =>
+        JSON.stringify(anterior) === JSON.stringify(pedido) ? anterior : pedido,
+      );
       setChegada((anterior) =>
         JSON.stringify(anterior) === JSON.stringify(data?.chegada ?? null)
           ? anterior
@@ -179,6 +244,8 @@ export function useDespachoMotorista() {
   }, [aplicarCorrida]);
 
   useEffect(() => {
+    if (pausado) return;
+
     const sincronizar = async () => {
       await sincronizarSituacao();
       await carregarCorridaAtual();
@@ -194,7 +261,7 @@ export function useDespachoMotorista() {
       clearTimeout(inicio);
       assinatura.remove();
     };
-  }, [sincronizarSituacao, carregarCorridaAtual]);
+  }, [pausado, sincronizarSituacao, carregarCorridaAtual]);
 
   const alternarDisponibilidade = useCallback(
     async (novoEstado: boolean) => {
@@ -250,8 +317,45 @@ export function useDespachoMotorista() {
     [mostrarToast, posicaoAtual],
   );
 
+  // "Recusar novas corridas" (tela Mais do 99): ao fim da corrida atual o
+  // motorista sai do ar em vez de voltar a receber ofertas. Espera o
+  // `ocupado` baixar porque finalizar/cancelar ainda sincronizam a situação
+  // com o servidor, e essa resposta (disponível) sobrescreveria o offline.
+  const [recusarNovas, setRecusarNovas] = useState(false);
+  const recusarNovasRef = useRef(false);
+  const idCorridaAnterior = useRef<number | null>(null);
+  const corridaEncerrada = useRef(false);
+
+  const alternarRecusarNovas = useCallback(() => {
+    const novo = !recusarNovasRef.current;
+    recusarNovasRef.current = novo;
+    setRecusarNovas(novo);
+    mostrarToast({
+      tipo: "info",
+      titulo: novo ? "Novas corridas recusadas" : "Novas corridas liberadas",
+      mensagem: novo
+        ? "Você fica offline assim que esta corrida terminar."
+        : "Ao terminar esta corrida você continua recebendo ofertas.",
+      chave: `recusar-novas:${novo}`,
+    });
+  }, [mostrarToast]);
+
   useEffect(() => {
-    if (!appAtivo || !disponivel || corrida !== null) return;
+    if (idCorridaAnterior.current !== null && corrida === null) {
+      corridaEncerrada.current = true;
+    }
+    idCorridaAnterior.current = corrida?.id ?? null;
+
+    if (!corridaEncerrada.current || ocupado) return;
+    corridaEncerrada.current = false;
+
+    if (!recusarNovasRef.current) return;
+    recusarNovasRef.current = false;
+    void alternarDisponibilidade(false).then(() => setRecusarNovas(false));
+  }, [corrida, ocupado, alternarDisponibilidade]);
+
+  useEffect(() => {
+    if (pausado || !appAtivo || !disponivel || corrida !== null) return;
 
     let cancelado = false;
 
@@ -301,13 +405,13 @@ export function useDespachoMotorista() {
       clearTimeout(buscaInicial);
       clearInterval(relogio);
     };
-  }, [appAtivo, disponivel, corrida, socketAtivo, gatilho]);
+  }, [pausado, appAtivo, disponivel, corrida, socketAtivo, gatilho]);
 
   // WebSocket em cima do polling: avisa que a lista mudou e o hook refaz a
   // consulta (o raio e a autorização seguem no servidor). Sem socket, o
   // intervalo normal de 5s continua valendo.
   useEffect(() => {
-    if (!appAtivo || !disponivel || corrida !== null) {
+    if (pausado || !appAtivo || !disponivel || corrida !== null) {
       return;
     }
 
@@ -337,11 +441,12 @@ export function useDespachoMotorista() {
         }
       };
     } catch {}
-  }, [appAtivo, disponivel, corrida]);
+  }, [pausado, appAtivo, disponivel, corrida]);
 
   const corridaAtivaId = corrida?.id;
   useEffect(() => {
-    if (!appAtivo || (!disponivel && corridaAtivaId === undefined)) return;
+    if (pausado || !appAtivo || (!disponivel && corridaAtivaId === undefined))
+      return;
 
     let cancelado = false;
 
@@ -387,6 +492,7 @@ export function useDespachoMotorista() {
     };
   }, [
     appAtivo,
+    pausado,
     disponivel,
     corridaAtivaId,
     posicaoAtual,
@@ -486,7 +592,7 @@ export function useDespachoMotorista() {
   );
 
   const avancar = useCallback(
-    async (acao: "cheguei" | "iniciar" | "finalizar") => {
+    async (acao: "cheguei" | "iniciar" | "confirmar-parada" | "finalizar") => {
       if (corrida === null) return;
 
       setOcupado(true);
@@ -515,6 +621,13 @@ export function useDespachoMotorista() {
 
         aplicarCorrida(acao === "finalizar" ? null : data, false);
 
+        const proximo =
+          acao === "finalizar" ? null : proximoPontoDaCorrida(data);
+        const rumo =
+          proximo?.tipo === "parada"
+            ? "A rota agora segue para a próxima parada."
+            : "A rota agora segue para o destino.";
+
         const avisos = {
           cheguei: {
             titulo: "Chegada informada",
@@ -522,11 +635,17 @@ export function useDespachoMotorista() {
           },
           iniciar: {
             titulo: "Corrida iniciada",
-            mensagem: "A rota agora segue para o destino.",
+            mensagem: rumo,
+          },
+          "confirmar-parada": {
+            titulo: "Parada confirmada",
+            mensagem: rumo,
           },
           finalizar: {
             titulo: "Corrida finalizada",
-            mensagem: "Você continua online e pode receber novas ofertas.",
+            mensagem: recusarNovasRef.current
+              ? "Como você pediu, não vai receber novas corridas agora."
+              : "Você continua online e pode receber novas ofertas.",
           },
         } as const;
         const aviso = avisos[acao];
@@ -534,7 +653,7 @@ export function useDespachoMotorista() {
         mostrarToast({
           tipo: "success",
           ...aviso,
-          chave: `corrida:${corrida.id}:${acao}`,
+          chave: `corrida:${corrida.id}:${acao}:${proximo?.paradasPendentes ?? 0}`,
         });
 
         if (acao === "finalizar") {
@@ -572,49 +691,168 @@ export function useDespachoMotorista() {
     ],
   );
 
-  const cancelarNaoComparecimento = useCallback(async () => {
-    if (corrida === null || ocupado) return;
-    setOcupado(true);
+  // canal da própria corrida: pedidos de novo destino e troca de pagamento
+  // chegam na hora, sem esperar a próxima rodada de posição (8s)
+  useEffect(() => {
+    if (pausado || corridaAtivaId === undefined) return;
+
+    const echo = obterEcho();
+    if (echo === null) return;
+
     try {
-      const atual = await posicaoAtual();
-      if (atual === null) throw new Error("Localização indisponível.");
-      await api.post("/motorista/posicao", atual);
-      await api.post(`/motorista/corridas/${corrida.id}/cancelar`, {
-        tipo: "nao_comparecimento",
-        motivo: "Passageiro não compareceu ao embarque",
-      });
-      aplicarCorrida(null, false);
-      setEspera(null);
-      setChegada(null);
-      setPassageiro(null);
-      setDisponivel(true);
-      setGatilho((atual) => atual + 1);
-      mostrarToast({
-        tipo: "info",
-        titulo: "Corrida cancelada por ausência",
-        mensagem: "A tarifa base foi registrada como taxa de cancelamento.",
-      });
-      await sincronizarSituacao();
-    } catch (falha) {
-      mostrarToast({
-        tipo: "error",
-        titulo: "Não foi possível cancelar por ausência",
-        mensagem: mensagemDoErro(
-          falha,
-          "Confira sua localização e tente novamente.",
-        ),
-      });
-    } finally {
-      setOcupado(false);
-    }
-  }, [
-    corrida,
-    ocupado,
-    posicaoAtual,
-    aplicarCorrida,
-    mostrarToast,
-    sincronizarSituacao,
-  ]);
+      echo
+        .private(`corrida.${corridaAtivaId}`)
+        .listen(".corrida.atualizada", () => void carregarCorridaAtual());
+
+      return () => {
+        try {
+          echo.leave(`corrida.${corridaAtivaId}`);
+        } catch {
+          /* canal já encerrado */
+        }
+      };
+    } catch {}
+  }, [pausado, corridaAtivaId, carregarCorridaAtual]);
+
+  const responderNovoDestino = useCallback(
+    async (aceitar: boolean) => {
+      if (corrida === null || pedidoNovoDestino === null) return;
+
+      setRespondendoPedido(true);
+      try {
+        await api.post(
+          `/motorista/corridas/${corrida.id}/destino/${pedidoNovoDestino.id}/${aceitar ? "aceitar" : "recusar"}`,
+        );
+        setPedidoNovoDestino(null);
+        mostrarToast({
+          tipo: aceitar ? "success" : "info",
+          titulo: aceitar ? "Novo destino aceito" : "Novo destino recusado",
+          mensagem: aceitar
+            ? "A rota foi atualizada para o novo destino."
+            : "A corrida segue para o destino anterior.",
+          chave: `destino:${pedidoNovoDestino.id}:${aceitar}`,
+        });
+      } catch (falha) {
+        mostrarToast({
+          tipo: "warning",
+          titulo: "O pedido não vale mais",
+          mensagem: mensagemDoErro(
+            falha,
+            "Confira sua conexão e tente novamente.",
+          ),
+        });
+      } finally {
+        await carregarCorridaAtual();
+        setRespondendoPedido(false);
+      }
+    },
+    [corrida, pedidoNovoDestino, mostrarToast, carregarCorridaAtual],
+  );
+
+  const cancelarNaoComparecimento =
+    useCallback(async (): Promise<ResultadoCancelamento> => {
+      if (corrida === null || ocupado) {
+        return { ok: false, mensagem: "Aguarde a ação anterior terminar." };
+      }
+      setOcupado(true);
+      try {
+        const atual = await posicaoAtual();
+        if (atual === null) {
+          return {
+            ok: false,
+            mensagem:
+              "Ative o GPS e permita o acesso à localização para registrar a ausência.",
+          };
+        }
+        await api.post("/motorista/posicao", atual);
+        const { data: cancelada } = await api.post<{
+          corrida_financeiro?: { taxa_cancelamento?: number | string | null };
+        }>(`/motorista/corridas/${corrida.id}/cancelar`, {
+          tipo: "nao_comparecimento",
+          motivo: "Passageiro não compareceu ao embarque",
+        });
+        const taxa = Number(
+          cancelada?.corrida_financeiro?.taxa_cancelamento ?? 0,
+        );
+        aplicarCorrida(null, false);
+        setEspera(null);
+        setChegada(null);
+        setPassageiro(null);
+        setDisponivel(true);
+        setGatilho((atual) => atual + 1);
+        mostrarToast({
+          tipo: "info",
+          titulo: "Corrida cancelada por ausência",
+          mensagem:
+            taxa > 0
+              ? `Taxa de ausência de R$ ${taxa.toFixed(2).replace(".", ",")} registrada para você.`
+              : "Esta categoria não tem taxa de ausência.",
+        });
+        await sincronizarSituacao();
+        return { ok: true };
+      } catch (falha) {
+        return {
+          ok: false,
+          mensagem: mensagemDoErro(
+            falha,
+            "Confira sua localização e tente novamente.",
+          ),
+        };
+      } finally {
+        setOcupado(false);
+      }
+    }, [
+      corrida,
+      ocupado,
+      posicaoAtual,
+      aplicarCorrida,
+      mostrarToast,
+      sincronizarSituacao,
+    ]);
+
+  const cancelarCorrida = useCallback(
+    async (motivo: string): Promise<ResultadoCancelamento> => {
+      if (corrida === null || ocupado || motivo.trim() === "") {
+        return { ok: false, mensagem: "Aguarde a ação anterior terminar." };
+      }
+
+      setOcupado(true);
+      try {
+        await api.post(`/motorista/corridas/${corrida.id}/cancelar`, {
+          motivo: motivo.trim(),
+        });
+        aplicarCorrida(null, false);
+        setEspera(null);
+        setChegada(null);
+        setPassageiro(null);
+        setOferta(null);
+        setOfertas([]);
+        setDisponivel(true);
+        recusadas.current.clear();
+        setGatilho((atual) => atual + 1);
+        await sincronizarSituacao();
+        return { ok: true };
+      } catch (falha) {
+        await carregarCorridaAtual();
+        return {
+          ok: false,
+          mensagem: mensagemDoErro(
+            falha,
+            "Confira sua conexão e tente novamente.",
+          ),
+        };
+      } finally {
+        setOcupado(false);
+      }
+    },
+    [
+      corrida,
+      ocupado,
+      aplicarCorrida,
+      sincronizarSituacao,
+      carregarCorridaAtual,
+    ],
+  );
 
   return {
     disponivel,
@@ -633,6 +871,12 @@ export function useDespachoMotorista() {
     recusar,
     recarregarOfertas,
     avancar,
+    cancelarCorrida,
     cancelarNaoComparecimento,
+    recusarNovas,
+    alternarRecusarNovas,
+    pedidoNovoDestino,
+    respondendoPedido,
+    responderNovoDestino,
   };
 }

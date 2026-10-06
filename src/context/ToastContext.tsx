@@ -9,7 +9,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { Animated, Easing, StyleSheet, Text, View } from "react-native";
+import { Text } from "@/components/common/Texto";
+import { Animated, Easing, StyleSheet, View } from "react-native";
 
 export type TipoToast = "success" | "error" | "warning" | "info";
 

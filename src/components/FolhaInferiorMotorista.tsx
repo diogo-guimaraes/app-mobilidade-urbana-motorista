@@ -44,9 +44,8 @@ export default function FolhaInferiorMotorista({
         {/* Campo de pesquisa */}
         <BottomSheetView className="flex-1 items-center px-4">
           <Text maxFontSizeMultiplier={1.1} style={styles.saudacao}>
-            escreva aqui, {user?.name?.split(/\s+/)[0]}!
+            Olá, {user?.name?.split(/\s+/)[0]}!
           </Text>
-          {/* crie aqui */}
         </BottomSheetView>
       </BottomSheet>
     </View>

@@ -13,6 +13,7 @@ interface props {
   emCorrida: boolean;
   ocupado: boolean;
   onAlternarDisponibilidade: (proximoEstado: boolean) => void;
+  onAlturaChange?: (altura: number) => void;
 }
 
 export default function MenuInferiorMotorista({
@@ -21,6 +22,7 @@ export default function MenuInferiorMotorista({
   emCorrida,
   ocupado,
   onAlternarDisponibilidade,
+  onAlturaChange,
 }: props) {
   const [dialogPreferenciasVisible, setDialogPreferenciasVisibleLocal] =
     useState(false);
@@ -66,7 +68,13 @@ export default function MenuInferiorMotorista({
         buscandoCorrida={disponivel}
       />
 
-      <SafeAreaView edges={["bottom"]} style={styles.bottomMenuWrapper}>
+      <SafeAreaView
+        edges={["bottom"]}
+        style={styles.bottomMenuWrapper}
+        onLayout={({ nativeEvent }) =>
+          onAlturaChange?.(Math.ceil(nativeEvent.layout.height))
+        }
+      >
         <View style={styles.bottomMenu}>
           {/* 🔹 Ícone lateral esquerdo (Config/Desconectar) */}
           <TouchableOpacity

@@ -239,7 +239,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const sessaoValida = useCallback(async () => {
     try {
-      await api.get("/usuario-logado");
+      const { data } = await api.get<Partial<Usuario>>("/usuario-logado");
+
+      // o usuário guardado no aparelho pode estar desatualizado (nome/foto
+      // trocados em outro lugar) ou até ser de outra conta: com o banco de
+      // desenvolvimento recriado, o mesmo token passou a apontar para outro
+      // usuário e o app seguia mostrando o nome antigo. Vale o do servidor.
+      if (data?.id) {
+        const salvo = await SecureStore.getItemAsync("user");
+        const anterior = salvo ? (JSON.parse(salvo) as Partial<Usuario>) : null;
+        const mesmaConta =
+          anterior !== null && String(anterior.id) === String(data.id);
+        const atualizado = { ...(mesmaConta ? anterior : {}), ...data } as Usuario;
+
+        if (JSON.stringify(atualizado) !== salvo) {
+          await SecureStore.setItemAsync("user", JSON.stringify(atualizado));
+          setUser(atualizado);
+        }
+      }
 
       return true;
     } catch (error) {

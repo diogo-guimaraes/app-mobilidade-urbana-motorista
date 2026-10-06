@@ -1,6 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
 import { Text } from "@/components/common/Texto";
+import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useState } from "react";
 import {
   Animated,
   BackHandler,

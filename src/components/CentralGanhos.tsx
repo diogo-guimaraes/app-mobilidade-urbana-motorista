@@ -2,6 +2,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { Text } from "@/components/common/Texto";
+import { api } from "@/Services/api";
 import {
   Animated,
   BackHandler,
@@ -36,6 +37,12 @@ export default function CentralGanhos({
 
   const [historicoCorridas, setHistoricoCorridas] = useState(false);
   const [meuSaldo, setMeuSaldo] = useState(false);
+  // números reais vindos de /motorista/me/ganhos; "—" enquanto carrega ou sem rede
+  const [ganhos, setGanhos] = useState<{
+    data: string;
+    ganhos_do_dia: number;
+    saldo: number;
+  } | null>(null);
 
   const [visibleMetodoResgate, setVisibleMetodoResgate] = useState(false);
   const [visibleConvidadeMotorista, setVisibleConvidadeMotorista] =
@@ -71,6 +78,25 @@ export default function CentralGanhos({
     );
     return () => subscription.remove();
   }, [visible, onClose]);
+
+  useEffect(() => {
+    if (!visible) return;
+    let ativo = true;
+    api
+      .get<{ data: string; ganhos_do_dia: number; saldo: number }>(
+        "/motorista/me/ganhos",
+      )
+      .then(({ data }) => {
+        if (ativo) setGanhos(data);
+      })
+      .catch(() => {});
+    return () => {
+      ativo = false;
+    };
+  }, [visible]);
+
+  const formatarReais = (valor: number | undefined) =>
+    valor === undefined ? "—" : `R$${valor.toFixed(2).replace(".", ",")}`;
 
   useEffect(() => {
     if (visible) {
@@ -143,9 +169,13 @@ export default function CentralGanhos({
               onPress={mostrarHistoricoCorridas}
               style={styles.mainEarningCard}
             >
-              <Text style={styles.earningLabel}>Ganhos do dia (jan.27)</Text>
+              <Text style={styles.earningLabel}>
+                Ganhos do dia{ganhos ? ` (${ganhos.data})` : ""}
+              </Text>
               <View style={styles.row}>
-                <Text style={styles.earningValue}>R$103,70</Text>
+                <Text style={styles.earningValue}>
+                  {formatarReais(ganhos?.ganhos_do_dia)}
+                </Text>
                 <Ionicons name="chevron-forward" size={24} color="#333" />
               </View>
             </TouchableOpacity>
@@ -168,7 +198,9 @@ export default function CentralGanhos({
                   <Text style={styles.resourceName}>Saldo</Text>
                 </View>
                 <View style={styles.row}>
-                  <Text style={styles.resourceValue}>R$291,01</Text>
+                  <Text style={styles.resourceValue}>
+                    {formatarReais(ganhos?.saldo)}
+                  </Text>
                   <Ionicons name="chevron-forward" size={18} color="#CCC" />
                 </View>
               </TouchableOpacity>
@@ -212,7 +244,7 @@ export default function CentralGanhos({
                   </View>
                 </View>
                 <View style={styles.row}>
-                  <Text style={styles.resourceValue}>R$0,77</Text>
+                  <Text style={styles.resourceValue}>—</Text>
                   <Ionicons name="chevron-forward" size={18} color="#CCC" />
                 </View>
               </TouchableOpacity>

@@ -1,3 +1,4 @@
+// CODEX: 0 linhas alteradas; adapta formulário, teclado e rodapé às áreas seguras. Remover após validação ou commit.
 import AppLogo from "@/components/common/AppLogo";
 import ErrorBanner from "@/components/common/ErrorBanner";
 import { Text, TextInput } from "@/components/common/Texto";
@@ -29,7 +30,7 @@ export default function LoginEmail() {
   const { user, loading, login } = useAuth();
 
   const [step, setStep] = useState(1);
-  const espacoDoTeclado = useEspacoDoTeclado();
+  const espacoDoTeclado = useEspacoDoTeclado(false);
 
   // voltar tem que andar um passo de cada vez; só sai da tela no primeiro
 
@@ -129,6 +130,7 @@ export default function LoginEmail() {
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
           >
             {/* HEADER */}
             <View
@@ -247,8 +249,7 @@ export default function LoginEmail() {
             style={[
               styles.footer,
               {
-                paddingBottom:
-                  Math.max(insets.bottom + 12, 60) + espacoDoTeclado,
+                paddingBottom: Math.max(insets.bottom, 16) + espacoDoTeclado,
               },
             ]}
           >
@@ -338,6 +339,9 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
     flexGrow: 1,
     paddingHorizontal: 30,
     marginTop: 20,
@@ -387,6 +391,9 @@ const styles = StyleSheet.create({
   },
 
   footer: {
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",

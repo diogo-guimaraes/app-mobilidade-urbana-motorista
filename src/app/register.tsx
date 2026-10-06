@@ -1,3 +1,4 @@
+// CODEX: 0 linhas alteradas; adapta formulário, teclado e rodapé às áreas seguras. Remover após validação ou commit.
 import AppLogo from "@/components/common/AppLogo";
 import ErrorBanner from "@/components/common/ErrorBanner";
 import { Text, TextInput } from "@/components/common/Texto";
@@ -26,7 +27,7 @@ export default function Cadastro() {
   }>();
 
   const [step, setStep] = useState(1);
-  const espacoDoTeclado = useEspacoDoTeclado();
+  const espacoDoTeclado = useEspacoDoTeclado(false);
 
   // voltar tem que andar um passo de cada vez; só sai da tela no primeiro
   // o passo 1 é o único sem voltar no rodapé, ao lado do Continuar
@@ -239,11 +240,10 @@ export default function Cadastro() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {/* HEADER */}
-        <View
-          style={[styles.header, { paddingTop: Math.max(insets.top + 12, 56) }]}
-        >
+        <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
           <AppLogo />
           <View style={styles.badgeContainer}>
             <Text style={styles.badgeText}>🚗 Área do Motorista</Text>
@@ -467,7 +467,12 @@ export default function Cadastro() {
         </View>
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: 80 + espacoDoTeclado }]}>
+      <View
+        style={[
+          styles.footer,
+          { paddingBottom: Math.max(insets.bottom, 16) + espacoDoTeclado },
+        ]}
+      >
         <TouchableOpacity
           style={styles.roundedButton}
           onPress={voltarPasso}
@@ -546,6 +551,9 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
     flexGrow: 1,
     paddingHorizontal: 30,
     marginTop: 20,
@@ -663,6 +671,9 @@ const styles = StyleSheet.create({
   },
 
   footer: {
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",

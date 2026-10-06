@@ -1,9 +1,16 @@
+// CODEX: contagem pendente; recupera carregamento e limita enquadramento à área visível. Remover após validação/commit.
+import { useCarregamentoMapa } from "@/hooks/useCarregamentoMapa";
+import { paddingMapa, pontoMapaValido } from "@/domain/visualizacaoMapa";
 import { MaterialIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Text } from "@/components/common/Texto";
 import {
-  Alert,
+  classificarFalhaLocalizacao,
+  comTempoLimite,
+} from "@/domain/localizacao";
+import {
   AppState,
   Linking,
   Platform,
@@ -25,6 +32,7 @@ import Animated, {
   type SharedValue,
   useAnimatedStyle,
 } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export interface Coordenada {
   latitude: number;
@@ -43,15 +51,34 @@ interface MapProps {
   alvoEhDestino?: boolean;
   // altura ocupada pela folha da corrida, pra rota não ficar embaixo dela
   alturaFolha?: number;
+  // altura de um painel fixo no rodapé (ex.: "Buscando"), que fica por cima
+  // da folha arrastável quando ela está recolhida
+  alturaMinimaRodape?: number;
 }
 
-// Região inicial vazia - será substituída pela localização do usuário
-const emptyRegion: Region = {
-  latitude: 0,
-  longitude: 0,
-  latitudeDelta: 0.01, // 🔹 atualizado para manter consistência com home.tsx
-  longitudeDelta: 0.01,
+// Sem posição ainda e sem cache, mostra o país inteiro em vez de 0,0 (que é
+// oceano): o mapa aparece na hora e se ajusta quando a posição chegar.
+const REGIAO_BRASIL: Region = {
+  latitude: -14.235,
+  longitude: -51.9253,
+  latitudeDelta: 35,
+  longitudeDelta: 35,
 };
+
+const CHAVE_ULTIMA_REGIAO = "@motorista_ultima_regiao";
+const LIMITE_POSICAO_MS = 15_000;
+
+const regiaoDaPosicao = (coords: {
+  latitude: number;
+  longitude: number;
+}): Region => ({
+  latitude: coords.latitude,
+  longitude: coords.longitude,
+  latitudeDelta: 0.01,
+  longitudeDelta: 0.01,
+});
+
+type Permissao = "verificando" | "concedida" | "negada";
 
 export default function Map({
   region,
@@ -64,17 +91,23 @@ export default function Map({
   alvo = null,
   alvoEhDestino = false,
   alturaFolha = 0,
+  alturaMinimaRodape = 0,
 }: MapProps) {
   const { height: alturaTela } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const [userLocation, setUserLocation] = useState<Region | null>(null);
-  const [locationPermission, setLocationPermission] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasInitialLocation, setHasInitialLocation] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
-  const [mapaTentativa, setMapaTentativa] = useState(0);
-  const [mapaDemorando, setMapaDemorando] = useState(false);
-  const temporizadorMapa = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [permissao, setPermissao] = useState<Permissao>("verificando");
+  const [buscandoPosicao, setBuscandoPosicao] = useState(false);
+  const [localizacaoIndisponivel, setLocalizacaoIndisponivel] = useState(false);
+  const [regiaoReserva, setRegiaoReserva] = useState<Region>(REGIAO_BRASIL);
+  const temPosicaoReal = useRef(false);
+  const {
+    pronto: mapReady, tentativa: mapaTentativa, demorando: mapaDemorando,
+    aoPronto: mapaPronto, aoCarregar: mapaCarregado, dispensar: dispensarAvisoMapa,
+    tentarNovamente: recarregarMapa,
+  } = useCarregamentoMapa();
+  const [dimensoesMapa, setDimensoesMapa] = useState({ width: 0, height: 0 });
   const [tentativaLocalizacao, setTentativaLocalizacao] = useState(0);
 
   const estiloPosicaoCentralizar = useAnimatedStyle(() => {
@@ -88,11 +121,14 @@ export default function Map({
     const alturaOcupada =
       alturaFolha > 0
         ? alturaFolha
-        : interpolate(
-            indice,
-            [0, 1, 2],
-            [alturaTela * 0.18, alturaTela * 0.52, alturaTela * 0.92],
-            Extrapolation.CLAMP,
+        : Math.max(
+            interpolate(
+              indice,
+              [0, 1, 2],
+              [alturaTela * 0.18, alturaTela * 0.52, alturaTela * 0.92],
+              Extrapolation.CLAMP,
+            ),
+            alturaMinimaRodape,
           );
 
     return {
@@ -105,35 +141,7 @@ export default function Map({
           ? 1
           : interpolate(indice, [0, 1.7, 2], [1, 1, 0], Extrapolation.CLAMP),
     };
-  }, [alturaFolha, alturaTela, bottomSheetIndex, indiceFolhaAnimado]);
-
-  const limparTemporizadorMapa = useCallback(() => {
-    if (temporizadorMapa.current !== null)
-      clearTimeout(temporizadorMapa.current);
-    temporizadorMapa.current = null;
-  }, []);
-
-  const mapaPronto = useCallback(() => {
-    setMapReady(true);
-    if (Platform.OS === "android") {
-      limparTemporizadorMapa();
-      temporizadorMapa.current = setTimeout(
-        () => setMapaDemorando(true),
-        12_000,
-      );
-    }
-  }, [limparTemporizadorMapa]);
-
-  // onMapLoaded só existe no Android e não dispara de forma confiável em
-  // todo aparelho: quando falha, o aviso de "mapa não carregou" aparecia com
-  // o mapa desenhado na tela. Região assentada e posição do usuário também
-  // provam que a camada está viva.
-  const mapaCarregado = useCallback(() => {
-    limparTemporizadorMapa();
-    setMapaDemorando(false);
-  }, [limparTemporizadorMapa]);
-
-  useEffect(() => () => limparTemporizadorMapa(), [limparTemporizadorMapa]);
+  }, [alturaFolha, alturaMinimaRodape, alturaTela, bottomSheetIndex, indiceFolhaAnimado]);
 
   // 🔹 guarda a região original do usuário para aplicar offsets conforme o BottomSheet
   const userInitialRegion = useRef<Region | null>(null);
@@ -145,159 +153,161 @@ export default function Map({
       ? `${rota.length}:${rota[0].latitude},${rota[0].longitude}:${rota[rota.length - 1].latitude},${rota[rota.length - 1].longitude}`
       : "";
 
+  // Contorno do react-native-maps no Android (nova arquitetura, issue
+  // react-native-maps#5840): desmontar a Polyline às vezes deixa a linha
+  // desenhada no mapa nativo. Quando a rota some (chegou no embarque,
+  // corrida acabou), remonta o mapa para limpá-la.
+  const rotaAnterior = useRef("");
+  useEffect(() => {
+    const tinhaRota = rotaAnterior.current !== "";
+    rotaAnterior.current = chaveRota;
+    if (tinhaRota && chaveRota === "") recarregarMapa();
+  }, [chaveRota, recarregarMapa]);
+
   useEffect(() => {
     if (chaveRota === "" || !mapReady || mapRef.current === null) return;
 
-    mapRef.current.fitToCoordinates(rota, {
-      edgePadding: {
-        top: 140,
-        right: 60,
-        bottom: Math.max(alturaFolha, 120) + 40,
-        left: 60,
-      },
+    if (dimensoesMapa.width <= 0 || dimensoesMapa.height <= 0) return;
+    const pontosValidos = rota.filter(pontoMapaValido);
+    if (pontosValidos.length < 2) return;
+    mapRef.current.fitToCoordinates(pontosValidos, {
+      edgePadding: paddingMapa(dimensoesMapa.width, dimensoesMapa.height, insets.top + 100, Math.max(alturaFolha, 120) + 16),
       animated: true,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveRota, alturaFolha, mapReady]);
+  }, [chaveRota, alturaFolha, mapReady, dimensoesMapa.width, dimensoesMapa.height, insets.top]);
 
-  // Solicitar permissão de localização
+  useEffect(() => {
+    void AsyncStorage.getItem(CHAVE_ULTIMA_REGIAO)
+      .then((salva) => {
+        if (salva && !temPosicaoReal.current) {
+          const ponto = JSON.parse(salva);
+          if (pontoMapaValido(ponto)) setRegiaoReserva(regiaoDaPosicao(ponto));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Primeira posição real vem de quem responder antes: expo-location ou a
+  // camada "minha localização" do próprio Google Maps (onUserLocationChange).
+  const registrarPosicao = useCallback(
+    (coords: { latitude: number; longitude: number }) => {
+      if (!pontoMapaValido(coords)) return;
+      const regiao = regiaoDaPosicao(coords);
+      userInitialRegion.current = regiao;
+      setUserLocation(regiao);
+      setLocalizacaoIndisponivel(false);
+
+      if (temPosicaoReal.current) return;
+      temPosicaoReal.current = true;
+      onUserLocationFound?.(regiao);
+      void AsyncStorage.setItem(CHAVE_ULTIMA_REGIAO, JSON.stringify(regiao));
+    },
+    [onUserLocationFound],
+  );
+
+  const obterPosicaoAtual = useCallback(async () => {
+    const recente = await Location.getLastKnownPositionAsync({
+      maxAge: 60_000,
+      requiredAccuracy: 500,
+    });
+
+    return (
+      recente ??
+      (await comTempoLimite(
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }),
+        LIMITE_POSICAO_MS,
+      ))
+    );
+  }, []);
+
   useEffect(() => {
     let montado = true;
 
     (async () => {
       try {
-        setIsLoading(true);
-
         let { status } = await Location.getForegroundPermissionsAsync();
         if (status !== "granted") {
           ({ status } = await Location.requestForegroundPermissionsAsync());
         }
-
         if (!montado) return;
 
-        if (status === "granted") {
-          setLocationPermission(true);
-
-          // Obter localização atual
-          const recente = await Location.getLastKnownPositionAsync({
-            maxAge: 60_000,
-            requiredAccuracy: 500,
-          });
-          const location =
-            recente ??
-            (await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Balanced,
-            }));
-
-          if (!montado) return;
-
-          const userRegion: Region = {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          };
-
-          userInitialRegion.current = {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          };
-
-          setUserLocation(userRegion);
-          setHasInitialLocation(true);
-
-          // Notificar o componente pai sobre a localização encontrada
-          if (onUserLocationFound) {
-            onUserLocationFound(userInitialRegion.current);
-          }
-
-          // Centralizar no usuário
-          if (mapRef.current) {
-            mapRef.current.animateToRegion(userRegion, 1000);
-          }
-        } else {
-          setLocationPermission(false);
-          Alert.alert(
-            "Localização Necessária",
-            "Este app precisa da sua localização para funcionar corretamente. Por favor, permita o acesso à localização nas configurações do seu dispositivo.",
-            [{ text: "OK" }],
-          );
+        if (status !== "granted") {
+          setPermissao("negada");
+          return;
         }
-      } catch (error) {
-        console.error("Erro ao obter localização:", error);
-        setLocationPermission(false);
-        Alert.alert(
-          "Erro de Localização",
-          "Não foi possível obter sua localização. Verifique se o GPS está ativado.",
-          [{ text: "OK" }],
-        );
+
+        setPermissao("concedida");
+        setBuscandoPosicao(true);
+        const posicao = await obterPosicaoAtual();
+        if (montado) registrarPosicao(posicao.coords);
+      } catch (erro) {
+        if (!montado || temPosicaoReal.current) return;
+
+        if (classificarFalhaLocalizacao(erro) === "sem_permissao") {
+          setPermissao("negada");
+        } else {
+          setLocalizacaoIndisponivel(true);
+        }
       } finally {
-        if (montado) setIsLoading(false);
+        if (montado) setBuscandoPosicao(false);
       }
     })();
 
     return () => {
       montado = false;
     };
-  }, [onUserLocationFound, tentativaLocalizacao]);
+  }, [obterPosicaoAtual, registrarPosicao, tentativaLocalizacao]);
 
+  // volta das configurações do Android: se o GPS ou a permissão foram
+  // ativados lá, tenta de novo sem o motorista precisar tocar em nada
   useEffect(() => {
     const assinatura = AppState.addEventListener("change", async (estado) => {
       if (estado !== "active") return;
-      const permissao = await Location.getForegroundPermissionsAsync();
-      if (permissao.status === "granted" && !locationPermission) {
-        setTentativaLocalizacao((atual) => atual + 1);
+      if (permissao === "concedida" && !localizacaoIndisponivel) return;
+
+      const atual = await Location.getForegroundPermissionsAsync();
+      if (atual.status === "granted") {
+        setTentativaLocalizacao((tentativa) => tentativa + 1);
       }
     });
     return () => assinatura.remove();
-  }, [locationPermission]);
+  }, [permissao, localizacaoIndisponivel]);
 
-  // Atualizar localização do usuário quando ele se move
   const handleUserLocationChange = (event: UserLocationChangeEvent) => {
     const { coordinate } = event.nativeEvent;
-    if (coordinate) {
-      const newUserRegion = {
-        latitude: coordinate.latitude,
-        longitude: coordinate.longitude,
-        latitudeDelta: 0.01, // 🔹 atualizado
-        longitudeDelta: 0.01,
-      };
-      setUserLocation(newUserRegion);
-      userInitialRegion.current = newUserRegion;
-    }
+    if (coordinate) registrarPosicao(coordinate);
   };
 
-  // Centralizar no usuário
+  const ativarLocalizacao = async () => {
+    if (Platform.OS === "android") {
+      // abre o diálogo do sistema "Ativar localização" sem sair do app
+      await Location.enableNetworkProviderAsync().catch(() => {});
+    }
+    setTentativaLocalizacao((atual) => atual + 1);
+  };
+
   const centerOnUser = async () => {
     if (userLocation && mapRef.current) {
       mapRef.current.animateToRegion(userLocation, 1000);
-    } else {
-      // Tentar obter localização novamente
-      try {
-        setIsLoading(true);
-        let location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
+      return;
+    }
 
-        const newUserRegion = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        };
-
-        setUserLocation(newUserRegion);
-        if (mapRef.current) {
-          mapRef.current.animateToRegion(newUserRegion, 1000);
-        }
-      } catch (error) {
-        console.error("Erro ao obter localização:", error);
-        Alert.alert("Erro", "Não foi possível obter sua localização");
-      } finally {
-        setIsLoading(false);
+    try {
+      setBuscandoPosicao(true);
+      const posicao = await obterPosicaoAtual();
+      registrarPosicao(posicao.coords);
+      mapRef.current?.animateToRegion(regiaoDaPosicao(posicao.coords), 1000);
+    } catch (erro) {
+      if (classificarFalhaLocalizacao(erro) === "sem_permissao") {
+        setPermissao("negada");
+      } else {
+        setLocalizacaoIndisponivel(true);
       }
+    } finally {
+      setBuscandoPosicao(false);
     }
   };
 
@@ -323,87 +333,36 @@ export default function Map({
     mapRef.current?.animateToRegion(novaRegiao, 450);
   }, [bottomSheetIndex, rota.length, mapReady]);
 
-  // Se ainda está carregando, mostrar loading
-  if (isLoading) {
-    return (
-      <View style={[StyleSheet.absoluteFill, styles.loadingContainer]}>
-        <MaterialIcons name="location-searching" size={48} color="#007AFF" />
-        <Text style={styles.loadingText}>Obtendo sua localização...</Text>
-      </View>
-    );
-  }
-
-  // Se não tem permissão, mostrar erro
-  if (!locationPermission) {
-    return (
-      <View style={[StyleSheet.absoluteFill, styles.errorContainer]}>
-        <MaterialIcons name="location-off" size={48} color="#FF3B30" />
-        <Text style={styles.errorText}>
-          Permissão de localização necessária
-        </Text>
-        <Text style={styles.errorSubtext}>
-          Ative a localização nas configurações do seu dispositivo para usar o
-          app
-        </Text>
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={() => {
-            void Location.requestForegroundPermissionsAsync().then(
-              ({ status }) => {
-                if (status === "granted") {
-                  setTentativaLocalizacao((atual) => atual + 1);
-                } else {
-                  void Linking.openSettings();
-                }
-              },
-            );
-          }}
-        >
-          <Text style={styles.retryButtonText}>Tentar Novamente</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  // Se tem permissão mas não conseguiu localização inicial (caso raro)
-  if (locationPermission && !hasInitialLocation) {
-    return (
-      <View style={[StyleSheet.absoluteFill, styles.errorContainer]}>
-        <MaterialIcons name="location-disabled" size={48} color="#FF9500" />
-        <Text style={styles.errorText}>Não foi possível obter localização</Text>
-        <Text style={styles.errorSubtext}>
-          Verifique se o GPS está ativado e tente novamente
-        </Text>
-        <TouchableOpacity style={styles.retryButton} onPress={centerOnUser}>
-          <Text style={styles.retryButtonText}>Tentar Novamente</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  const pedirPermissao = () => {
+    void Location.requestForegroundPermissionsAsync().then(({ status }) => {
+      if (status === "granted") {
+        setTentativaLocalizacao((atual) => atual + 1);
+      } else {
+        void Linking.openSettings();
+      }
+    });
+  };
 
   return (
-    <View style={[StyleSheet.absoluteFill, styles.mapContainer]}>
+    <View collapsable={false} style={[StyleSheet.absoluteFill, styles.mapContainer]}>
       <MapView
         key={mapaTentativa}
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
         region={
-          rota.length > 0 ? undefined : region || userLocation || emptyRegion
+          rota.length > 0 ? undefined : region || userLocation || regiaoReserva
         }
         onRegionChangeComplete={(regiao) => {
-          mapaCarregado();
           onRegionChange(regiao);
         }}
-        showsUserLocation={true}
+        showsUserLocation={permissao === "concedida"}
         showsMyLocationButton={false}
-        onUserLocationChange={(evento) => {
-          mapaCarregado();
-          handleUserLocationChange(evento);
-        }}
+        onUserLocationChange={handleUserLocationChange}
         followsUserLocation={false}
         mapType="standard"
         userInterfaceStyle="light"
+        onLayout={({ nativeEvent }) => setDimensoesMapa(nativeEvent.layout)}
         onMapReady={mapaPronto}
         onMapLoaded={mapaCarregado}
       >
@@ -426,25 +385,59 @@ export default function Map({
         )}
       </MapView>
 
-      {mapaDemorando && (
-        <View accessibilityRole="alert" style={styles.mapLoadError}>
-          <Text style={styles.mapLoadErrorTitle}>O mapa não carregou</Text>
-          <Text style={styles.mapLoadErrorText}>
-            Confira sua internet e atualize o Google Play Services.
-          </Text>
-          <TouchableOpacity
-            style={styles.mapLoadRetry}
-            onPress={() => {
-              limparTemporizadorMapa();
-              setMapReady(false);
-              setMapaDemorando(false);
-              setMapaTentativa((atual) => atual + 1);
-            }}
-          >
-            <Text style={styles.mapLoadRetryText}>Tentar novamente</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <View
+        pointerEvents="box-none"
+        style={[styles.avisos, { top: insets.top + 64 }]}
+      >
+        {mapaDemorando && (
+          <View accessibilityRole="alert" style={styles.aviso}>
+            <Text style={styles.avisoTitulo}>O mapa está demorando a aparecer?</Text>
+            <Text style={styles.avisoTexto}>
+              Confira sua conexão ou tente carregar novamente.
+            </Text>
+            <TouchableOpacity
+              style={styles.avisoBotao}
+              accessibilityRole="button"
+              onPress={recarregarMapa}
+            >
+              <Text style={styles.avisoBotaoTexto}>Tentar novamente</Text>
+            </TouchableOpacity>
+            <TouchableOpacity accessibilityRole="button" style={styles.dispensarAviso} onPress={dispensarAvisoMapa}>
+              <Text>O mapa já apareceu</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {permissao === "negada" ? (
+          <View accessibilityRole="alert" style={styles.aviso}>
+            <MaterialIcons name="location-off" size={26} color="#D93025" />
+            <Text style={styles.avisoTitulo}>Permita o acesso à localização</Text>
+            <Text style={styles.avisoTexto}>
+              Sem ela você não recebe corridas perto de você.
+            </Text>
+            <TouchableOpacity style={styles.avisoBotao} onPress={pedirPermissao}>
+              <Text style={styles.avisoBotaoTexto}>Permitir</Text>
+            </TouchableOpacity>
+          </View>
+        ) : localizacaoIndisponivel ? (
+          <View accessibilityRole="alert" style={styles.aviso}>
+            <MaterialIcons name="location-disabled" size={26} color="#E37400" />
+            <Text style={styles.avisoTitulo}>Não encontramos sua localização</Text>
+            <Text style={styles.avisoTexto}>
+              Ative a localização do aparelho ou vá para um local com sinal.
+            </Text>
+            <TouchableOpacity
+              style={styles.avisoBotao}
+              onPress={ativarLocalizacao}
+              disabled={buscandoPosicao}
+            >
+              <Text style={styles.avisoBotaoTexto}>
+                {buscandoPosicao ? "Procurando..." : "Ativar localização"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </View>
 
       {/* Botão para centralizar no usuário */}
       {!isGanhoModalVisible && (alturaFolha > 0 || bottomSheetIndex !== 2) && (
@@ -456,12 +449,12 @@ export default function Map({
             accessibilityRole="button"
             style={styles.centerButton}
             onPress={centerOnUser}
-            disabled={isLoading}
+            disabled={buscandoPosicao}
           >
             <MaterialIcons
-              name="my-location"
+              name={userLocation ? "my-location" : "location-searching"}
               size={24}
-              color={isLoading ? "#ccc" : "#007AFF"}
+              color={buscandoPosicao ? "#ccc" : "#007AFF"}
             />
           </TouchableOpacity>
         </Animated.View>
@@ -471,36 +464,54 @@ export default function Map({
 }
 
 const styles = StyleSheet.create({
+  dispensarAviso: { minHeight: 44, justifyContent: "center" },
   mapContainer: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#E5E3DF",
   },
-  mapLoadError: {
+  avisos: {
     position: "absolute",
-    top: 110,
-    left: 24,
-    right: 24,
+    left: 16,
+    right: 16,
     zIndex: 30,
     alignItems: "center",
+    gap: 10,
+  },
+  aviso: {
+    width: "100%",
+    maxWidth: 420,
+    alignItems: "center",
+    gap: 4,
     borderRadius: 18,
     backgroundColor: "#FFFFFF",
-    padding: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
   },
-  mapLoadErrorTitle: { color: "#202124", fontSize: 16, fontWeight: "700" },
-  mapLoadErrorText: {
-    marginTop: 5,
-    color: "#5F6368",
-    fontSize: 13,
+  avisoTitulo: {
+    color: "#202124",
+    fontSize: 16,
+    fontWeight: "700",
     textAlign: "center",
   },
-  mapLoadRetry: {
-    marginTop: 12,
-    borderRadius: 18,
-    backgroundColor: "#111",
-    paddingHorizontal: 18,
-    paddingVertical: 9,
+  avisoTexto: {
+    color: "#5F6368",
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
   },
-  mapLoadRetryText: { color: "#FFF", fontSize: 14, fontWeight: "600" },
+  avisoBotao: {
+    marginTop: 8,
+    minHeight: 44,
+    justifyContent: "center",
+    borderRadius: 22,
+    backgroundColor: "#111",
+    paddingHorizontal: 22,
+  },
+  avisoBotaoTexto: { color: "#FFF", fontSize: 14, fontWeight: "600" },
   centerButtonContainer: {
     position: "absolute",
     right: 16,
@@ -518,47 +529,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
-  },
-  loadingContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-  },
-  errorContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-  },
-  errorText: {
-    marginTop: 16,
-    fontSize: 18,
-    color: "#FF3B30",
-    textAlign: "center",
-    fontWeight: "bold",
-  },
-  errorSubtext: {
-    marginTop: 8,
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: "#007AFF",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "bold",
   },
 });

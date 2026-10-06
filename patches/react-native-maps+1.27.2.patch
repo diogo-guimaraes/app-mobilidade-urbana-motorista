@@ -1,0 +1,36 @@
+diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
+index ebf8780..f5a91df 100644
+--- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
++++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
+@@ -1171,19 +1171,22 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+                 savedFeatures = new ArrayList<>();
+             }
+ 
+-            // Ensure the list is large enough to set at the given index
+-            while(savedFeatures.size() <= index){
+-                savedFeatures.add(null);
+-            }
+-            savedFeatures.set(index, mapFeature);
++            insertAt(savedFeatures, index, mapFeature);
+             return;
+         }
+ 
+-        // Ensure the list is large enough to set at the given index
+-        while(features.size() <= index){
+-            features.add(null);
++        insertAt(features, index, mapFeature);
++    }
++
++    // addView(child, index) means "insert at index". Overwriting the slot
++    // (set) dropped the reference of the feature that was there, so it was
++    // never removed from the map (stale polylines/markers piling up) and every
++    // later index got out of sync.
++    private static void insertAt(List<MapFeature> list, int index, MapFeature mapFeature) {
++        while(list.size() < index){
++            list.add(null);
+         }
+-        features.set(index, mapFeature);
++        list.add(index, mapFeature);
+     }
+ 
+     public void addFeature(View child, int index) {

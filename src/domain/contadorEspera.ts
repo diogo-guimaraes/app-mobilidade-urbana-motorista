@@ -19,6 +19,10 @@ export interface ContadorEspera {
   apoio: string;
   valor: number;
   segundosCobrados: number;
+  segundosDecorridos: number;
+  // quanto do anel do relógio fica preenchido (0 a 1): na tolerância é o que
+  // resta da contagem regressiva; na cobrança, o que já foi cobrado do limite
+  progresso: number;
 }
 
 export type PerspectivaEspera = "motorista" | "passageiro";
@@ -69,6 +73,11 @@ export function calcularContadorEspera(
       apoio: "Por favor, aguarde. Taxa paga após a contagem.",
       valor: 0,
       segundosCobrados: 0,
+      segundosDecorridos: decorridos,
+      progresso:
+        resumo.tolerancia_segundos > 0
+          ? toleranciaRestante / resumo.tolerancia_segundos
+          : 0,
     };
   }
 
@@ -79,6 +88,8 @@ export function calcularContadorEspera(
       apoio: "Limite de 12 minutos atingido. A taxa não aumenta mais.",
       valor,
       segundosCobrados: cobrados,
+      segundosDecorridos: decorridos,
+      progresso: 1,
     };
   }
 
@@ -88,5 +99,10 @@ export function calcularContadorEspera(
     apoio: "Tempo de espera sendo cobrado, limitado a 12 minutos.",
     valor,
     segundosCobrados: cobrados,
+    segundosDecorridos: decorridos,
+    progresso:
+      resumo.limite_cobranca_segundos > 0
+        ? cobrados / resumo.limite_cobranca_segundos
+        : 1,
   };
 }

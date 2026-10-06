@@ -1,3 +1,4 @@
+// CODEX: 0 linhas alteradas; adapta formulário, teclado e rodapé às áreas seguras. Remover após validação ou commit.
 import AppLogo from "@/components/common/AppLogo";
 import ErrorBanner from "@/components/common/ErrorBanner";
 import { Text, TextInput } from "@/components/common/Texto";
@@ -95,7 +96,7 @@ export default function Liberacao() {
   const router = useRouter();
   const { logout } = useAuth();
   const { mostrarToast } = useToast();
-  const espacoDoTeclado = useEspacoDoTeclado();
+  const espacoDoTeclado = useEspacoDoTeclado(false);
   const {
     cadastro,
     carregando,
@@ -241,13 +242,9 @@ export default function Liberacao() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
-          <View
-            style={[
-              styles.header,
-              { paddingTop: Math.max(insets.top + 12, 56) },
-            ]}
-          >
+          <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
             <AppLogo />
           </View>
 
@@ -447,7 +444,7 @@ export default function Liberacao() {
           style={[
             styles.footer,
             {
-              paddingBottom: Math.max(insets.bottom + 12, 60) + espacoDoTeclado,
+              paddingBottom: Math.max(insets.bottom, 16) + espacoDoTeclado,
             },
           ]}
         >
@@ -492,7 +489,14 @@ const styles = StyleSheet.create({
   },
   carregandoTexto: { marginTop: 16, fontSize: 14, color: "#666" },
   header: { alignItems: "center", paddingTop: 56, paddingHorizontal: 20 },
-  content: { flexGrow: 1, paddingHorizontal: 30, marginTop: 20 },
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: 30,
+    marginTop: 20,
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
+  },
   aviso: {
     borderLeftWidth: 4,
     backgroundColor: "#FAFAFA",
@@ -594,6 +598,9 @@ const styles = StyleSheet.create({
   sair: { marginTop: 8, paddingVertical: 12, alignItems: "center" },
   sairTexto: { fontSize: 15, color: "#888", textDecorationLine: "underline" },
   footer: {
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
     paddingHorizontal: 30,
     paddingTop: 12,
     paddingBottom: 16,

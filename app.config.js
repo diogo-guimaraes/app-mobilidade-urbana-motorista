@@ -1,5 +1,5 @@
 /* global __dirname */
-// CODEX: 25 linhas alteradas neste arquivo; módulos nativos, teclado e chave obrigatória do mapa.
+// CODEX: 3 linhas adicionadas e 3 removidas; atualiza o nome Expo do motorista. Remover após validação/commit.
 const fs = require("fs");
 const path = require("path");
 
@@ -35,8 +35,8 @@ if (!ehDesenvolvimento && process.env.EAS_BUILD_PLATFORM === "ios" && !iosAppBun
 }
 
 module.exports = {
-  name: "p6driver-frontend",
-  slug: "p6driver-frontend",
+  name: "aplicativo-mobilidade-urbana-motorista",
+  slug: "aplicativo-mobilidade-urbana-motorista",
   version: "1.0.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",

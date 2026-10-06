@@ -1,3 +1,4 @@
+// CODEX: 15 linhas adicionadas e 5 removidas no diff atual; usa rota local sem consultar a API durante a simulação. Remover após validação/commit.
 import { api } from "@/Services/api";
 import type { Coordenada } from "@/domain/rotaDaCorrida";
 import {
@@ -20,6 +21,7 @@ interface RotaCalculada {
 export function useNavegacaoDaCorrida(
   alvo: Coordenada | null,
   posicao: Coordenada | null,
+  rotaForcada: RotaNavegacao | null = null,
 ) {
   const [rotaCalculada, setRotaCalculada] = useState<RotaCalculada | null>(
     null,
@@ -27,7 +29,9 @@ export function useNavegacaoDaCorrida(
   const [indicePasso, setIndicePasso] = useState(0);
 
   const chaveAlvo = alvo ? `${alvo.latitude},${alvo.longitude}` : "";
-  const rota = rotaCalculada?.chave === chaveAlvo ? rotaCalculada.rota : null;
+  const rota =
+    rotaForcada ??
+    (rotaCalculada?.chave === chaveAlvo ? rotaCalculada.rota : null);
   const origemDoTracado =
     rotaCalculada?.chave === chaveAlvo ? rotaCalculada.origem : null;
 
@@ -47,15 +51,19 @@ export function useNavegacaoDaCorrida(
   }, []);
 
   useEffect(() => {
+    // redefinir a etapa é necessário quando o alvo da navegação muda
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIndicePasso(0);
   }, [chaveAlvo]);
 
   const precisaRefazer =
-    origemDoTracado === null ||
-    (posicao !== null &&
-      distanciaMetros(origemDoTracado, posicao) > DISTANCIA_PARA_REFAZER_M);
+    rotaForcada === null &&
+    (origemDoTracado === null ||
+      (posicao !== null &&
+        distanciaMetros(origemDoTracado, posicao) > DISTANCIA_PARA_REFAZER_M));
 
   useEffect(() => {
+    if (rotaForcada !== null) return;
     if (chaveAlvo === "" || posicao === null || !precisaRefazer) return;
     if (requisicaoAtual.current === chaveAlvo) return;
 
@@ -89,10 +97,12 @@ export function useNavegacaoDaCorrida(
         }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveAlvo, posicao, precisaRefazer]);
+  }, [chaveAlvo, posicao, precisaRefazer, rotaForcada]);
 
   useEffect(() => {
     if (!rota) return;
+    // a posição externa determina a etapa atual da instrução de navegação
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIndicePasso((atual) => indiceDoPassoAtual(rota.passos, posicao, atual));
   }, [rota, posicao]);
 

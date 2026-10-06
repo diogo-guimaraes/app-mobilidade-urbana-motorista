@@ -30,6 +30,8 @@ test("mostra a contagem regressiva durante os dois minutos gratuitos", () => {
     apoio: "Por favor, aguarde. Taxa paga após a contagem.",
     valor: 0,
     segundosCobrados: 0,
+    segundosDecorridos: 90,
+    progresso: 0.25,
   });
 });
 
@@ -41,6 +43,8 @@ test("começa a cobrança proporcional depois da tolerância", () => {
   assert.equal(motorista.tempo, "1:00");
   assert.equal(motorista.valor, 0.3);
   assert.equal(passageiro.valor, 0.33);
+  assert.equal(motorista.progresso, 60 / 720);
+  assert.equal(motorista.segundosDecorridos, 180);
 });
 
 test("limita o contador e a taxa a doze minutos cobrados", () => {
@@ -52,6 +56,7 @@ test("limita o contador e a taxa a doze minutos cobrados", () => {
   assert.equal(motorista.segundosCobrados, 720);
   assert.equal(motorista.valor, 3.6);
   assert.equal(passageiro.valor, 4);
+  assert.equal(motorista.progresso, 1);
 });
 
 test("formata o relógio com minutos e segundos estáveis", () => {
