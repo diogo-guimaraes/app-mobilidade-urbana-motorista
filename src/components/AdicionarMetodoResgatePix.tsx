@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
 import { Text, TextInput } from "@/components/common/Texto";
 import {
+  ActivityIndicator,
   Animated,
   BackHandler,
   Dimensions,
@@ -13,6 +14,14 @@ import {
   View,
 } from "react-native";
 import MetodoResgateAdicionado from "./MetodoResgateAdicionado";
+import {
+  detectarTipoChavePix,
+  mensagemDeErro,
+  MetodoResgate,
+  ROTULO_CHAVE_PIX,
+  pedirCodigoDaConta,
+  salvarMetodoResgate,
+} from "@/domain/carteira";
 
 const { width, height } = Dimensions.get("window");
 
@@ -20,12 +29,16 @@ interface props {
   visible: boolean;
   onClose: () => void;
   duration?: number;
+  existente?: MetodoResgate | null;
+  onSalvo?: () => void;
 }
 
 export default function AdicionarMetodoResgate({
   visible,
   onClose,
   duration = 200,
+  existente = null,
+  onSalvo,
 }: props) {
   const insets = useSafeAreaInsets();
   const [translateX] = useState(() => new Animated.Value(width));
@@ -40,6 +53,35 @@ export default function AdicionarMetodoResgate({
   const [headerHeight, setHeaderHeight] = useState(0);
   const [visibleMetodoResgateAdicionado, setMetodoResgateAdicionado] =
     useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [codigo, setCodigo] = useState("");
+  const [avisoCodigo, setAvisoCodigo] = useState("");
+  const [enviandoCodigo, setEnviandoCodigo] = useState(false);
+  const tipoDaChave = detectarTipoChavePix(chavePix);
+  const documentoDigitos = cpf.replace(/\D/g, "");
+  const podeAdicionar =
+    tipoDaChave !== null &&
+    (documentoDigitos.length === 11 || documentoDigitos.length === 14) &&
+    /^\d{6}$/.test(codigo);
+
+  const enviarCodigo = async () => {
+    if (enviandoCodigo) return;
+    setEnviandoCodigo(true);
+    setErro("");
+    try {
+      const resposta = await pedirCodigoDaConta();
+      setAvisoCodigo(
+        resposta.codigo_teste
+          ? `Ambiente de teste: o código é ${resposta.codigo_teste}`
+          : "Enviamos um código por SMS.",
+      );
+    } catch (falha) {
+      setErro(mensagemDeErro(falha, "Não foi possível enviar o código."));
+    } finally {
+      setEnviandoCodigo(false);
+    }
+  };
 
   const toggleConfirm = useCallback(
     (show: boolean) => {
@@ -77,24 +119,46 @@ export default function AdicionarMetodoResgate({
     [confirmOverlayOpacity, slideConfirm],
   );
 
-  const mostrarMetodoResgateAdicionado = () => {
-    toggleConfirm(false);
-    setMetodoResgateAdicionado(true);
-  };
-
-  const handleSaqueStatusClose = () => {
-    setMetodoResgateAdicionado(false);
-    // Não fecha o SacarSaldo, apenas volta para ele
+  const salvar = async () => {
+    if (!podeAdicionar || tipoDaChave === null || salvando) return;
+    setSalvando(true);
+    setErro("");
+    try {
+      await salvarMetodoResgate({
+        tipo: "pix",
+        pix_tipo: tipoDaChave,
+        pix_chave: chavePix,
+        documento: cpf,
+        codigo,
+      });
+      setCodigo("");
+      setAvisoCodigo("");
+      toggleConfirm(false);
+      setMetodoResgateAdicionado(true);
+      onSalvo?.();
+    } catch (falha) {
+      setErro(mensagemDeErro(falha, "Não foi possível salvar a chave agora."));
+    } finally {
+      setSalvando(false);
+    }
   };
 
   const handleDrawerClose = useCallback(() => {
-    // Limpa os estados ao fechar
     setChavePix("");
     setCpf("");
+    setCodigo("");
+    setAvisoCodigo("");
+    setErro("");
     setShowConfirm(false);
     setMetodoResgateAdicionado(false);
     onClose();
   }, [onClose]);
+
+  // chave salva: fechar o aviso de sucesso volta para a lista de métodos
+  const handleSaqueStatusClose = () => {
+    setMetodoResgateAdicionado(false);
+    handleDrawerClose();
+  };
 
   useEffect(() => {
     const onBackPress = () => {
@@ -234,8 +298,15 @@ export default function AdicionarMetodoResgate({
             </View>
             <View style={styles.resgateContainer}>
               <Text style={styles.resgateLabel}>
-                Adicionar chave Pix para resgate
+                {existente
+                  ? "Trocar a chave Pix"
+                  : "Adicionar chave Pix para resgate"}
               </Text>
+              {existente && (
+                <Text style={styles.chaveAtual}>
+                  Chave atual: {existente.descricao.replace(/^Pix · /, "")}
+                </Text>
+              )}
               <Text style={styles.sectionTitle}>Chave Pix*</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
@@ -243,10 +314,27 @@ export default function AdicionarMetodoResgate({
                   placeholder="Celular, CPF/CNPJ, e-mail, chave aleatória"
                   keyboardType="default"
                   value={chavePix}
-                  onChangeText={setChavePix}
+                  onChangeText={(texto) => {
+                    setChavePix(texto);
+                    setErro("");
+                  }}
                   placeholderTextColor="#999"
+                  autoCapitalize="none"
+                  accessibilityLabel="Chave Pix"
                 />
               </View>
+              {!!chavePix.trim() && (
+                <Text
+                  style={[
+                    styles.tipoDetectado,
+                    !tipoDaChave && styles.tipoNaoReconhecido,
+                  ]}
+                >
+                  {tipoDaChave
+                    ? `Tipo: ${ROTULO_CHAVE_PIX[tipoDaChave]}`
+                    : "Não reconhecemos essa chave. Confira o que foi digitado."}
+                </Text>
+              )}
 
               <Text style={styles.sectionTitle}>CPF/CNPJ*</Text>
               <View style={styles.inputWrapper}>
@@ -255,10 +343,49 @@ export default function AdicionarMetodoResgate({
                   placeholder="CPF/CNPJ"
                   keyboardType="numeric"
                   value={cpf}
-                  onChangeText={setCpf}
+                  onChangeText={(texto) => {
+                    setCpf(texto);
+                    setErro("");
+                  }}
                   placeholderTextColor="#999"
+                  accessibilityLabel="CPF ou CNPJ do titular"
                 />
               </View>
+
+              <Text style={styles.sectionTitle}>
+                Código de verificação por SMS*
+              </Text>
+              <View style={[styles.inputWrapper, styles.codigoWrapper]}>
+                <TextInput
+                  style={[styles.input, styles.codigoInput]}
+                  placeholder="Código"
+                  keyboardType="numeric"
+                  maxLength={6}
+                  value={codigo}
+                  onChangeText={(texto) => {
+                    setCodigo(texto.replace(/\D/g, ""));
+                    setErro("");
+                  }}
+                  placeholderTextColor="#999"
+                  accessibilityLabel="Código de verificação"
+                />
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  disabled={enviandoCodigo}
+                  onPress={() => void enviarCodigo()}
+                >
+                  {enviandoCodigo ? (
+                    <ActivityIndicator color="#111" />
+                  ) : (
+                    <Text style={styles.enviarCodigo}>
+                      {avisoCodigo ? "Reenviar" : "Enviar"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+              {!!avisoCodigo && (
+                <Text style={styles.avisoCodigo}>{avisoCodigo}</Text>
+              )}
             </View>
           </View>
 
@@ -266,15 +393,16 @@ export default function AdicionarMetodoResgate({
             <TouchableOpacity
               style={[
                 styles.btnAdicionar,
-                (!chavePix || !cpf) && styles.btnDisabled,
+                !podeAdicionar && styles.btnDisabled,
               ]}
-              disabled={!chavePix || !cpf}
+              disabled={!podeAdicionar}
+              accessibilityRole="button"
               onPress={() => toggleConfirm(true)}
             >
               <Text
                 style={[
                   styles.btnAdicionarText,
-                  (!chavePix || !cpf) && styles.btnTextDisabled,
+                  !podeAdicionar && styles.btnTextDisabled,
                 ]}
               >
                 Adicionar
@@ -313,6 +441,12 @@ export default function AdicionarMetodoResgate({
                   <Text style={styles.detailValue}>{chavePix}</Text>
                 </View>
                 <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Tipo da chave</Text>
+                  <Text style={styles.detailValue}>
+                    {tipoDaChave ? ROTULO_CHAVE_PIX[tipoDaChave] : "—"}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>CPF/CNPJ</Text>
                   <Text style={styles.detailValue}>{cpf}</Text>
                 </View>
@@ -320,11 +454,22 @@ export default function AdicionarMetodoResgate({
             </View>
 
             <View style={styles.confirmFooter}>
+              {!!erro && (
+                <Text style={styles.erroTexto} accessibilityRole="alert">
+                  {erro}
+                </Text>
+              )}
               <TouchableOpacity
-                style={styles.btnConfirmarFinal}
-                onPress={mostrarMetodoResgateAdicionado}
+                style={[styles.btnConfirmarFinal, salvando && { opacity: 0.6 }]}
+                disabled={salvando}
+                accessibilityRole="button"
+                onPress={() => void salvar()}
               >
-                <Text style={styles.btnConfirmarText}>Confirmar</Text>
+                {salvando ? (
+                  <ActivityIndicator color="#111" />
+                ) : (
+                  <Text style={styles.btnConfirmarText}>Confirmar</Text>
+                )}
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -335,6 +480,29 @@ export default function AdicionarMetodoResgate({
 }
 
 const styles = StyleSheet.create({
+  codigoWrapper: { flexDirection: "row", alignItems: "center" },
+  codigoInput: { flex: 1 },
+  enviarCodigo: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FF6600",
+    paddingHorizontal: 8,
+  },
+  avisoCodigo: {
+    fontSize: 13,
+    color: "#2DB089",
+    marginTop: -8,
+    marginBottom: 12,
+  },
+  chaveAtual: { fontSize: 14, color: "#666", marginBottom: 16 },
+  tipoDetectado: {
+    fontSize: 13,
+    color: "#2DB089",
+    marginTop: -8,
+    marginBottom: 12,
+  },
+  tipoNaoReconhecido: { color: "#C62828" },
+  erroTexto: { fontSize: 13, color: "#C62828", marginBottom: 10 },
   drawer: {
     position: "absolute",
     right: 0,

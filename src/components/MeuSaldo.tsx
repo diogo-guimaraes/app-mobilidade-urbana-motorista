@@ -1,7 +1,15 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Text } from "@/components/common/Texto";
+import {
+  carregarCarteira,
+  Carteira,
+  consultarSaque,
+  formatarReais,
+  Movimento,
+  Saque,
+} from "@/domain/carteira";
 import {
   Animated,
   BackHandler,
@@ -24,6 +32,47 @@ interface props {
   duration?: number;
 }
 
+const ICONE_MOVIMENTO: Record<
+  Movimento["tipo"],
+  keyof typeof MaterialCommunityIcons.glyphMap
+> = {
+  corrida: "car",
+  taxa_dinheiro: "cash",
+  saque: "bank-transfer-out",
+};
+
+const doisDigitos = (n: number) => String(n).padStart(2, "0");
+
+const comoData = (iso: string | null) => {
+  const data = iso ? new Date(iso) : null;
+  return data && !Number.isNaN(data.getTime()) ? data : null;
+};
+
+const diaDe = (iso: string | null) => {
+  const data = comoData(iso);
+  return data
+    ? `${doisDigitos(data.getDate())}/${doisDigitos(data.getMonth() + 1)}/${data.getFullYear()}`
+    : "";
+};
+
+const hora = (iso: string | null) => {
+  const data = comoData(iso);
+  return data
+    ? `${doisDigitos(data.getHours())}:${doisDigitos(data.getMinutes())}`
+    : "";
+};
+
+function agruparPorDia(movimentos: Movimento[]) {
+  const grupos: { dia: string; itens: Movimento[] }[] = [];
+  for (const movimento of movimentos) {
+    const dia = diaDe(movimento.quando);
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && ultimo.dia === dia) ultimo.itens.push(movimento);
+    else grupos.push({ dia, itens: [movimento] });
+  }
+  return grupos;
+}
+
 export default function MeuSaldo({ visible, onClose, duration = 200 }: props) {
   const insets = useSafeAreaInsets();
   const [translateX] = useState(() => new Animated.Value(width));
@@ -31,22 +80,37 @@ export default function MeuSaldo({ visible, onClose, duration = 200 }: props) {
   const [isMounted, setIsMounted] = useState(visible);
 
   const [sacarSaldo, setSacarSaldo] = useState(false);
-  const [saqueStatus, setSaqueStatus] = useState(false);
+  const [saqueAberto, setSaqueAberto] = useState<Saque | null>(null);
   const [visibleDefinirMetodoResgate, setVisibleDefinirMetodoResgate] =
     useState(false);
+  const [carteira, setCarteira] = useState<Carteira | null>(null);
+  const [erroCarteira, setErroCarteira] = useState(false);
+
+  const recarregar = useCallback(() => {
+    carregarCarteira()
+      .then((dados) => {
+        setCarteira(dados);
+        setErroCarteira(false);
+      })
+      .catch(() => setErroCarteira(true));
+  }, []);
+
+  useEffect(() => {
+    if (visible) recarregar();
+  }, [visible, recarregar]);
 
   const mostrarSacarSaldo = () => {
     setSacarSaldo(true);
   };
 
   const mostrarDefinirMetodoResgate = () => {
-    console.log("mostrarDefinirMetodoResgate");
     setVisibleDefinirMetodoResgate(true);
   };
 
-  const mostrarSaqueStatus = () => {
-    // toggleConfirm(false);
-    setSaqueStatus(true);
+  const abrirSaque = (id: number) => {
+    consultarSaque(id)
+      .then(setSaqueAberto)
+      .catch(() => undefined);
   };
 
   useEffect(() => {
@@ -97,89 +161,7 @@ export default function MeuSaldo({ visible, onClose, duration = 200 }: props) {
 
   if (!isMounted) return null;
 
-  // Mock de transações baseado na imagem
-  const transacoes = [
-    {
-      id: 1,
-      tipo: "Pop",
-      hora: "08:15",
-      valor: "R$8,56",
-      cor: "#E67E22",
-      icon: "car",
-    },
-    {
-      id: 2,
-      tipo: "Pop",
-      hora: "08:02-PIX",
-      valor: "R$17,10",
-      cor: "#E67E22",
-      icon: "dots-horizontal-circle",
-    },
-    {
-      id: 3,
-      tipo: "Pop",
-      hora: "08:02-Dinheiro",
-      valor: "R$5,10",
-      cor: "#E67E22",
-      icon: "car",
-    },
-    {
-      id: 4,
-      tipo: "Pop",
-      hora: "07:30-Dinheiro",
-      valor: "-R$0,62",
-      cor: "#111",
-      icon: "car",
-    },
-    {
-      id: 5,
-      tipo: "Corra e ganhe",
-      hora: "03:12",
-      valor: "R$4,00",
-      cor: "#E67E22",
-      icon: "gift",
-    },
-    {
-      id: 6,
-      tipo: "Pop",
-      hora: "08:15",
-      valor: "R$8,56",
-      cor: "#E67E22",
-      icon: "car",
-    },
-    {
-      id: 7,
-      tipo: "Pop",
-      hora: "08:02-PIX",
-      valor: "R$17,10",
-      cor: "#E67E22",
-      icon: "dots-horizontal-circle",
-    },
-    {
-      id: 8,
-      tipo: "Pop",
-      hora: "08:02-Dinheiro",
-      valor: "R$5,10",
-      cor: "#E67E22",
-      icon: "car",
-    },
-    {
-      id: 9,
-      tipo: "Pop",
-      hora: "07:30-Dinheiro",
-      valor: "-R$0,62",
-      cor: "#111",
-      icon: "car",
-    },
-    {
-      id: 10,
-      tipo: "Corra e ganhe",
-      hora: "03:12",
-      valor: "R$4,00",
-      cor: "#E67E22",
-      icon: "gift",
-    },
-  ];
+  const grupos = agruparPorDia(carteira?.movimentos ?? []);
 
   return (
     <>
@@ -213,32 +195,36 @@ export default function MeuSaldo({ visible, onClose, duration = 200 }: props) {
           </View>
 
           <ScrollView style={styles.container} bounces={false}>
-            {/* SEÇÃO AMARELA - SALDO ATUAL */}
             <View style={styles.balanceCard}>
               <View style={styles.balanceInfo}>
-                <Text style={styles.balanceValue}>R$130,52</Text>
-                <View style={styles.regasRow}>
-                  <Text style={styles.regasText}>Regras</Text>
-                  <Ionicons
-                    name="information-circle-outline"
-                    size={16}
-                    color="#999"
-                    style={{ marginLeft: 4 }}
-                  />
-                </View>
-                <Text style={styles.subText}>
-                  Motoristas com Conta99: Resgate para Conta99 em até 1 minuto
+                <Text style={styles.balanceValue}>
+                  {carteira ? formatarReais(carteira.saldo) : "—"}
                 </Text>
+                <Text style={styles.regasText} numberOfLines={2}>
+                  {carteira?.metodo_principal
+                    ? `Saques para ${carteira.metodo_principal.descricao}`
+                    : "Cadastre uma chave Pix ou conta bancária para sacar"}
+                </Text>
+                <Text style={styles.subText}>
+                  Corridas pagas no app entram no saldo. Nas corridas em
+                  dinheiro, a taxa da plataforma é descontada daqui.
+                </Text>
+                {erroCarteira && (
+                  <Text style={styles.erroTexto} accessibilityRole="alert">
+                    Não foi possível atualizar o saldo.
+                  </Text>
+                )}
               </View>
 
               <TouchableOpacity
                 onPress={mostrarSacarSaldo}
-                style={styles.btnResgatar}
+                disabled={!carteira}
+                accessibilityRole="button"
+                style={[styles.btnResgatar, !carteira && styles.btnInativo]}
               >
                 <Text style={styles.btnResgatarText}>Resgatar</Text>
               </TouchableOpacity>
 
-              {/* Ícone de Moeda de fundo (opcional para estética) */}
               <MaterialCommunityIcons
                 name="currency-usd"
                 size={120}
@@ -247,64 +233,105 @@ export default function MeuSaldo({ visible, onClose, duration = 200 }: props) {
               />
             </View>
 
-            {/* LISTA DE TRANSAÇÕES */}
             <View style={styles.listSection}>
-              <TouchableOpacity style={styles.dateSelector}>
-                <Text style={styles.dateText}>06-02-2026</Text>
-                <Ionicons name="chevron-up" size={18} color="#CCC" />
-              </TouchableOpacity>
+              {carteira && carteira.movimentos.length === 0 && (
+                <Text style={styles.vazio}>
+                  Seus ganhos e saques vão aparecer aqui.
+                </Text>
+              )}
 
-              <View style={styles.transferenciaRow}>
-                <Text style={styles.transferenciaLabel}>Transferência</Text>
-                <Text style={styles.transferenciaValue}>R$0,00</Text>
-              </View>
+              {grupos.map((grupo) => (
+                <View key={grupo.dia}>
+                  <Text style={styles.dateText}>{grupo.dia}</Text>
+                  {grupo.itens.map((item) => {
+                    const ehSaque = item.tipo === "saque";
+                    const falhou = item.status === "falhou";
+                    const situacao = falhou
+                      ? "Não concluído"
+                      : item.status === "processando"
+                        ? "Processando"
+                        : item.detalhe;
 
-              {transacoes.map((item) => (
-                <TouchableOpacity
-                  onPress={mostrarSaqueStatus}
-                  key={item.id}
-                  style={styles.transactionItem}
-                >
-                  <View style={styles.itemLeft}>
-                    <View style={styles.iconCircle}>
-                      <MaterialCommunityIcons
-                        name={item.icon as any}
-                        size={22}
-                        color="#444"
-                      />
-                    </View>
-                    <View>
-                      <Text style={styles.itemType}>{item.tipo}</Text>
-                      <Text style={styles.itemTime}>{item.hora}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.itemRight}>
-                    <Text
-                      style={[
-                        styles.itemValue,
-                        {
-                          color: item.valor.includes("-") ? "#111" : "#F39C12",
-                        },
-                      ]}
-                    >
-                      {item.valor}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={18} color="#CCC" />
-                  </View>
-                </TouchableOpacity>
+                    return (
+                      <TouchableOpacity
+                        key={`${item.tipo}-${item.id}`}
+                        disabled={!ehSaque}
+                        onPress={() => abrirSaque(item.id)}
+                        accessibilityRole={ehSaque ? "button" : undefined}
+                        style={styles.transactionItem}
+                      >
+                        <View style={styles.itemLeft}>
+                          <View style={styles.iconCircle}>
+                            <MaterialCommunityIcons
+                              name={ICONE_MOVIMENTO[item.tipo]}
+                              size={22}
+                              color="#444"
+                            />
+                          </View>
+                          <View style={styles.itemTextos}>
+                            <Text style={styles.itemType}>
+                              {item.descricao}
+                            </Text>
+                            <Text style={styles.itemTime} numberOfLines={1}>
+                              {hora(item.quando)} · {situacao}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.itemRight}>
+                          <Text
+                            style={[
+                              styles.itemValue,
+                              {
+                                color: falhou
+                                  ? "#999"
+                                  : item.valor < 0
+                                    ? "#111"
+                                    : "#F39C12",
+                              },
+                            ]}
+                          >
+                            {formatarReais(item.valor)}
+                          </Text>
+                          {ehSaque && (
+                            <Ionicons
+                              name="chevron-forward"
+                              size={18}
+                              color="#CCC"
+                            />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               ))}
             </View>
           </ScrollView>
         </Animated.View>
       </View>
-      <SacarSaldo visible={sacarSaldo} onClose={() => setSacarSaldo(false)} />
+      <SacarSaldo
+        visible={sacarSaldo}
+        carteira={carteira}
+        onSacado={recarregar}
+        onClose={() => {
+          setSacarSaldo(false);
+          recarregar();
+        }}
+      />
       <SaqueStatus
-        visible={saqueStatus}
-        onClose={() => setSaqueStatus(false)}
+        visible={saqueAberto !== null}
+        saque={saqueAberto}
+        onClose={() => {
+          setSaqueAberto(null);
+          recarregar();
+        }}
       />
       <DefinirMetodoResgate
         visible={visibleDefinirMetodoResgate}
-        onClose={() => setVisibleDefinirMetodoResgate(false)}
+        onClose={() => {
+          setVisibleDefinirMetodoResgate(false);
+          recarregar();
+        }}
       />
     </>
   );
@@ -429,8 +456,27 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
   itemLeft: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    marginRight: 8,
+  },
+  itemTextos: {
+    flexShrink: 1,
+  },
+  btnInativo: {
+    opacity: 0.5,
+  },
+  erroTexto: {
+    fontSize: 13,
+    color: "#C62828",
+    marginTop: 6,
+  },
+  vazio: {
+    fontSize: 14,
+    color: "#999",
+    textAlign: "center",
+    marginTop: 12,
   },
   iconCircle: {
     width: 44,

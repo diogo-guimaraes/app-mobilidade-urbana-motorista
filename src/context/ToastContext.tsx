@@ -33,6 +33,18 @@ interface ToastContextValue {
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
+
+// de sucesso e informação, só estes aparecem: corrida aceita, a resposta do
+// motorista ao novo destino/trajeto pedido pelo passageiro, o que muda ao
+// ligar ou desligar a pilha do Negocia e por que uma proposta saiu da pilha.
+// Erros e avisos sempre aparecem, com o motivo: sem eles a falha ficava muda.
+const TOASTS_PERMITIDOS = [
+  /^corrida:\d+:aceita$/,
+  /^destino:\d+:(aceito|recusado)$/,
+  /^empilhar-negociadas:(true|false)$/,
+  /^negocia:\d+:(recusada|expirada|outro)$/,
+];
+
 const DURACAO_ENTRADA_MS = 220;
 const DURACAO_SAIDA_MS = 200;
 
@@ -139,9 +151,15 @@ export function ToastProvider({ children }: PropsWithChildren) {
   }, []);
 
   const mostrarToast = useCallback((opcoes: OpcoesToast) => {
-    if (!opcoes.chave?.endsWith(":aceita")) return;
-
     const tipo = opcoes.tipo ?? "info";
+    const problema = tipo === "error" || tipo === "warning";
+
+    if (
+      !problema &&
+      !TOASTS_PERMITIDOS.some((padrao) => padrao.test(opcoes.chave ?? ""))
+    )
+      return;
+
     const chave =
       opcoes.chave ?? [tipo, opcoes.titulo, opcoes.mensagem ?? ""].join(":");
     const agora = Date.now();
@@ -163,9 +181,12 @@ export function ToastProvider({ children }: PropsWithChildren) {
       id: proximoId.current++,
       chave,
       titulo: opcoes.titulo,
+      // só o título, como no app do passageiro: a segunda linha não aparece
       mensagem: undefined,
       tipo,
-      duracaoMs: Math.min(4000, Math.max(1800, opcoes.duracaoMs ?? 2800)),
+      duracaoMs: problema
+        ? Math.min(6000, Math.max(3500, opcoes.duracaoMs ?? 4500))
+        : Math.min(4000, Math.max(1800, opcoes.duracaoMs ?? 2800)),
     };
 
     setToasts([novoToast]);

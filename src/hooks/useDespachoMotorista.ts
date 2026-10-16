@@ -3,14 +3,33 @@ import { api } from "@/Services/api";
 import { obterEcho } from "@/Services/echo";
 import { useToast } from "@/context/ToastContext";
 import { ResumoEspera } from "@/domain/contadorEspera";
+import { comTempoLimite } from "@/domain/localizacao";
 import { proximoPontoDaCorrida } from "@/domain/rotaDaCorrida";
 import * as Location from "expo-location";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 
 const INTERVALO_BUSCA_SEM_SOCKET_MS = 5000;
 const INTERVALO_BUSCA_COM_SOCKET_MS = 30000;
 const INTERVALO_POSICAO_MS = 8000;
+
+const esperandoPassageiro = (item: OfertaCorrida) =>
+  item.minha_proposta?.status === "pendente";
+
+// a chamada que toca (e aparece na tela) é a primeira corrida que o motorista
+// ainda não recusou, dispensou nem respondeu com uma proposta; o resto fica
+// só na lista de solicitações. Proposta esperando o passageiro não segura a
+// próxima chamada.
+const chamadaDaVez = (
+  lista: OfertaCorrida[],
+  dispensadas: Set<number>,
+): OfertaCorrida | null =>
+  lista.find(
+    (item) =>
+      !item.recusada_localmente &&
+      !dispensadas.has(item.corrida_id) &&
+      !item.minha_proposta,
+  ) ?? null;
 
 export interface OfertaCorrida {
   corrida_id: number;
@@ -21,9 +40,36 @@ export interface OfertaCorrida {
   origem: string;
   destino: string | null;
   paradas: number;
+  // embarque, paradas e destino em ordem, para o mapa da chamada
+  trajeto?: {
+    tipo: "origem" | "parada" | "destino";
+    latitude: number;
+    longitude: number;
+  }[];
+  para_outra_pessoa?: boolean;
+  // nome da categoria que este motorista atende no pedido (Pop, Moto...)
+  categoria?: string | null;
+  metodo_pagamento?: string | null;
+  // Negocia: o motorista manda proposta e o passageiro escolhe
+  negociavel?: boolean;
+  minha_proposta?: PropostaEnviada | null;
   passageiro_nota: number | null;
   passageiro_corridas: number;
   recusada_localmente?: boolean;
+}
+
+export interface PropostaEnviada {
+  valor_motorista: number | null;
+  status: string;
+  expira_em: string | null;
+  validade_segundos?: number;
+}
+
+// a corrida que acabou de ser cancelada, para o aviso dizer quem cancelou
+interface CorridaEncerrada {
+  id: number;
+  cancelado_por: string | null;
+  taxa_cancelamento: number;
 }
 
 export interface CorridaEmCurso {
@@ -40,9 +86,13 @@ export interface CorridaEmCurso {
   }[];
   corrida_financeiro?: {
     metodo_pagamento: string | null;
+    valor_motorista?: number | string | null;
   } | null;
   produto?: { id: number; nome: string } | null;
   metodo_pagamento?: string | null;
+  tempo_aceite?: string | null;
+  // Negocia no Pix/cartão: até quando o motorista escolhido espera o pagamento
+  pagamento_expira_em?: string | null;
 }
 
 // pedido do passageiro para trocar o destino (backend: AlterarCorridaService)
@@ -67,6 +117,8 @@ const ROTULO_PAGAMENTO: Record<string, string> = {
 
 export interface PassageiroDaCorrida {
   nome: string;
+  // quem pediu, quando a corrida é para outra pessoa
+  solicitante?: string | null;
   foto: string | null;
   foto_oculta?: boolean;
   telefone: string | null;
@@ -121,24 +173,60 @@ export function useDespachoMotorista(pausado = false) {
   const [appAtivo, setAppAtivo] = useState(AppState.currentState === "active");
 
   const recusadas = useRef<Set<number>>(new Set());
+  const dispensadas = useRef<Set<number>>(new Set());
+  const propostasMandadas = useRef<Set<number>>(new Set());
+  // propostas que esperavam o passageiro na última consulta (corrida → valor)
+  const esperandoAntes = useRef<Map<number, number | null>>(new Map());
   const corridaRef = useRef<CorridaEmCurso | null>(null);
 
   const aplicarCorrida = useCallback(
-    (nova: CorridaEmCurso | null, avisarEncerramento = true) => {
+    (
+      nova: CorridaEmCurso | null,
+      avisarEncerramento = true,
+      encerrada?: CorridaEncerrada | null,
+    ) => {
       const anterior = corridaRef.current;
 
       if (avisarEncerramento && anterior !== null && nova === null) {
         setDisponivel(true);
+
+        const canceladaPeloPassageiro =
+          encerrada?.id === anterior.id &&
+          encerrada.cancelado_por === "passageiro";
+        const taxa = canceladaPeloPassageiro ? encerrada.taxa_cancelamento : 0;
+
         mostrarToast({
           tipo: "warning",
-          titulo: "Corrida encerrada",
-          mensagem:
-            "A corrida não está mais ativa e você voltou a receber ofertas.",
+          titulo: canceladaPeloPassageiro
+            ? "O passageiro cancelou a corrida"
+            : "Corrida encerrada",
+          mensagem: canceladaPeloPassageiro
+            ? taxa > 0
+              ? `Você recebe R$ ${taxa.toFixed(2).replace(".", ",")} de taxa de cancelamento e voltou a receber ofertas.`
+              : "Você voltou a receber ofertas."
+            : "A corrida não está mais ativa e você voltou a receber ofertas.",
           chave: `corrida:${anterior.id}:encerrada-remotamente`,
         });
       }
 
       if (nova !== null) setDisponivel(false);
+
+      // Negocia: a corrida chega quando o passageiro escolhe a proposta (no
+      // Pix/cartão, depois do pagamento), sem o motorista tocar em aceitar
+      if (
+        nova !== null &&
+        nova.status_corrida === "aceita" &&
+        (propostasMandadas.current.has(nova.id) ||
+          anterior?.status_corrida === "aguardando_pagamento")
+      ) {
+        propostasMandadas.current.delete(nova.id);
+        mostrarToast({
+          tipo: "success",
+          titulo: "O passageiro escolheu sua proposta",
+          mensagem: "Siga a rota até o ponto de embarque do passageiro.",
+          chave: `corrida:${nova.id}:aceita`,
+        });
+      }
 
       // o passageiro pode trocar a forma de pagamento uma vez por corrida
       if (
@@ -174,7 +262,20 @@ export function useDespachoMotorista(pausado = false) {
 
     if (permissao.status !== "granted") return null;
 
-    const { coords } = await Location.getCurrentPositionAsync({});
+    // o mapa já acompanha o GPS: a leitura recente chega na hora. Pedir uma
+    // nova a cada rodada levava ~30 s em aparelho parado.
+    const recente = await Location.getLastKnownPositionAsync({
+      maxAge: 15_000,
+      requiredAccuracy: 100,
+    });
+    const { coords } =
+      recente ??
+      (await comTempoLimite(
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }),
+        20_000,
+      ));
 
     return { latitude: coords.latitude, longitude: coords.longitude };
   }, []);
@@ -183,6 +284,7 @@ export function useDespachoMotorista(pausado = false) {
     try {
       const { data } = await api.get<{
         corrida: CorridaEmCurso | null;
+        encerrada?: CorridaEncerrada | null;
         chegada: ChegadaEstimada | null;
         passageiro: PassageiroDaCorrida | null;
         espera: ResumoEspera | null;
@@ -192,7 +294,7 @@ export function useDespachoMotorista(pausado = false) {
         timeout: 10000,
       });
 
-      aplicarCorrida(data?.corrida ?? null);
+      aplicarCorrida(data?.corrida ?? null, true, data?.encerrada);
       const pedido =
         data?.alteracao_destino?.status === "pendente"
           ? data.alteracao_destino
@@ -355,6 +457,9 @@ export function useDespachoMotorista(pausado = false) {
   }, [corrida, ocupado, alternarDisponibilidade]);
 
   useEffect(() => {
+    // em corrida ou offline as propostas antigas não contam mais: ao voltar,
+    // nada de aviso sobre elas
+    if (corrida !== null || !disponivel) esperandoAntes.current = new Map();
     if (pausado || !appAtivo || !disponivel || corrida !== null) return;
 
     let cancelado = false;
@@ -376,14 +481,75 @@ export function useDespachoMotorista(pausado = false) {
           ...item,
           recusada_localmente: recusadas.current.has(item.corrida_id),
         }));
-        const proxima = atuais.find((item) => !item.recusada_localmente);
-
+        // com proposta enviada a chamada não volta a tocar: o motorista só
+        // espera a escolha do passageiro (ou faz nova oferta pela lista)
         setOfertas(atuais);
-        setOferta(proxima ?? null);
-      } catch {
+        setOferta(chamadaDaVez(atuais, dispensadas.current));
+
+        // Negocia: a corrida em que ele propôs saiu da lista porque o
+        // passageiro escolheu alguém; se foi ele, ela vira a corrida atual
+        const decididas = [...propostasMandadas.current].filter(
+          (id) => !atuais.some((item) => item.corrida_id === id),
+        );
+        if (decididas.length > 0) {
+          await carregarCorridaAtual();
+          decididas.forEach((id) => propostasMandadas.current.delete(id));
+        }
+
+        // o card some da pilha: o motorista fica sabendo por quê (quando o
+        // passageiro o escolhe, quem avisa é a corrida que começa)
+        const esperando = new Map(
+          atuais
+            .filter(esperandoPassageiro)
+            .map((item) => [
+              item.corrida_id,
+              item.minha_proposta?.valor_motorista ?? null,
+            ]),
+        );
+        esperandoAntes.current.forEach((valor, corridaId) => {
+          if (esperando.has(corridaId) || corridaRef.current?.id === corridaId)
+            return;
+
+          const status = atuais.find((item) => item.corrida_id === corridaId)
+            ?.minha_proposta?.status;
+          const deValor =
+            valor === null
+              ? ""
+              : ` de R$\u00a0${valor.toFixed(2).replace(".", ",")}`;
+          const motivo =
+            status === "recusada"
+              ? "recusada"
+              : status === undefined
+                ? "outro"
+                : "expirada";
+
+          mostrarToast({
+            tipo: "info",
+            titulo:
+              motivo === "recusada"
+                ? `O passageiro recusou sua proposta${deValor}`
+                : motivo === "outro"
+                  ? "O passageiro fechou com outro motorista"
+                  : `Sua proposta${deValor} venceu sem resposta`,
+            chave: `negocia:${corridaId}:${motivo}`,
+          });
+        });
+        esperandoAntes.current = esperando;
+      } catch (falha) {
         if (!cancelado) {
           setOferta(null);
           setOfertas([]);
+        }
+
+        // 409: o servidor já não o vê disponível (no Negocia, foi escolhido
+        // pelo passageiro e a corrida é dele); a tela acompanha o servidor
+        // (mesma ordem da abertura do app: situação e depois a corrida inteira)
+        if (
+          (falha as { response?: { status?: number } })?.response?.status ===
+          409
+        ) {
+          await sincronizarSituacao();
+          await carregarCorridaAtual();
         }
       } finally {
         emBusca = false;
@@ -405,7 +571,17 @@ export function useDespachoMotorista(pausado = false) {
       clearTimeout(buscaInicial);
       clearInterval(relogio);
     };
-  }, [pausado, appAtivo, disponivel, corrida, socketAtivo, gatilho]);
+  }, [
+    pausado,
+    appAtivo,
+    disponivel,
+    corrida,
+    socketAtivo,
+    gatilho,
+    carregarCorridaAtual,
+    sincronizarSituacao,
+    mostrarToast,
+  ]);
 
   // WebSocket em cima do polling: avisa que a lista mudou e o hook refaz a
   // consulta (o raio e a autorização seguem no servidor). Sem socket, o
@@ -471,10 +647,6 @@ export function useDespachoMotorista(pausado = false) {
         } catch {
           // posição é informativa; falhar aqui não pode atrapalhar a corrida
         }
-
-        // durante corrida, posição nova também produz uma previsão nova
-        if (!cancelado && corridaAtivaId !== undefined)
-          await carregarCorridaAtual();
       } catch {
         // GPS indisponível nesta rodada; o próximo intervalo tenta de novo.
       } finally {
@@ -482,9 +654,26 @@ export function useDespachoMotorista(pausado = false) {
       }
     };
 
+    // a corrida (previsão e pedido de novo destino) tem relógio próprio: o
+    // GPS pode levar dezenas de segundos por leitura, e o pedido do passageiro
+    // expira em 2 min
+    let recarregando = false;
+    const recarregarCorrida = async () => {
+      if (recarregando || cancelado || corridaAtivaId === undefined) return;
+      recarregando = true;
+      try {
+        await carregarCorridaAtual();
+      } finally {
+        recarregando = false;
+      }
+    };
+
     enviarPosicao();
 
-    const relogio = setInterval(enviarPosicao, INTERVALO_POSICAO_MS);
+    const relogio = setInterval(() => {
+      void enviarPosicao();
+      void recarregarCorrida();
+    }, INTERVALO_POSICAO_MS);
 
     return () => {
       cancelado = true;
@@ -570,13 +759,18 @@ export function useDespachoMotorista(pausado = false) {
   const recusar = useCallback(
     (corridaId?: number) => {
       const id = corridaId ?? oferta?.corrida_id;
-      if (id !== undefined) recusadas.current.add(id);
+      if (id !== undefined) {
+        recusadas.current.add(id);
+        void api
+          .post(`/motorista/corridas/${id}/recusar`)
+          .catch(() => undefined);
+      }
 
       const atualizadas = ofertas.map((item) =>
         item.corrida_id === id ? { ...item, recusada_localmente: true } : item,
       );
       setOfertas(atualizadas);
-      setOferta(atualizadas.find((item) => !item.recusada_localmente) ?? null);
+      setOferta(chamadaDaVez(atualizadas, dispensadas.current));
       mostrarToast({
         tipo: "info",
         titulo: "Solicitação recusada",
@@ -585,6 +779,84 @@ export function useDespachoMotorista(pausado = false) {
     },
     [oferta, ofertas, mostrarToast],
   );
+
+  // Negocia: a chamada some sem recusar; a corrida continua na lista
+  const dispensarChamada = useCallback(
+    (corridaId: number) => {
+      dispensadas.current.add(corridaId);
+      setOferta(chamadaDaVez(ofertas, dispensadas.current));
+    },
+    [ofertas],
+  );
+
+  const propor = useCallback(
+    async (corridaId: number, valorMotorista?: number) => {
+      setOcupado(true);
+
+      try {
+        const { data } = await api.post<PropostaEnviada>(
+          `/motorista/corridas/${corridaId}/propostas`,
+          valorMotorista === undefined
+            ? {}
+            : { valor_motorista: valorMotorista },
+        );
+
+        propostasMandadas.current.add(corridaId);
+        const atualizadas = ofertas.map((item) =>
+          item.corrida_id === corridaId
+            ? { ...item, minha_proposta: data }
+            : item,
+        );
+        setOfertas(atualizadas);
+        setOferta(chamadaDaVez(atualizadas, dispensadas.current));
+      } catch (falha) {
+        mostrarToast({
+          tipo: "warning",
+          titulo: "A proposta não foi enviada",
+          mensagem: mensagemDoErro(
+            falha,
+            "A corrida pode não estar mais recebendo propostas.",
+          ),
+        });
+        // a corrida pode ter saído da negociação; a lista do servidor manda
+        recusadas.current.add(corridaId);
+        setOferta(null);
+        setGatilho((atual) => atual + 1);
+      } finally {
+        setOcupado(false);
+      }
+    },
+    [ofertas, mostrarToast],
+  );
+
+  // propostas do motorista esperando o passageiro escolher, da que vence
+  // primeiro para a última (a pilha na tela)
+  const propostasPendentes = useMemo(
+    () =>
+      ofertas
+        .filter(esperandoPassageiro)
+        .sort(
+          (a, b) =>
+            new Date(a.minha_proposta?.expira_em ?? 0).getTime() -
+            new Date(b.minha_proposta?.expira_em ?? 0).getTime(),
+        ),
+    [ofertas],
+  );
+  const propostaEnviada = propostasPendentes[0] ?? null;
+
+  // com o socket a lista só volta a cada 30 s: quando a primeira proposta
+  // vence, a consulta sai na hora e a pilha diminui
+  const proximoVencimento = propostaEnviada?.minha_proposta?.expira_em ?? null;
+  useEffect(() => {
+    if (proximoVencimento === null) return;
+
+    const espera = setTimeout(
+      () => setGatilho((atual) => atual + 1),
+      Math.max(0, new Date(proximoVencimento).getTime() - Date.now()) + 1000,
+    );
+
+    return () => clearTimeout(espera);
+  }, [proximoVencimento]);
 
   const recarregarOfertas = useCallback(
     () => setGatilho((atual) => atual + 1),
@@ -662,6 +934,7 @@ export function useDespachoMotorista(pausado = false) {
           setEspera(null);
           setPassageiro(null);
           recusadas.current.clear();
+          dispensadas.current.clear();
           setGatilho((atual) => atual + 1);
           await sincronizarSituacao();
         } else {
@@ -724,13 +997,14 @@ export function useDespachoMotorista(pausado = false) {
           `/motorista/corridas/${corrida.id}/destino/${pedidoNovoDestino.id}/${aceitar ? "aceitar" : "recusar"}`,
         );
         setPedidoNovoDestino(null);
+        const alvo = pedidoNovoDestino.paradas?.length ? "trajeto" : "destino";
         mostrarToast({
           tipo: aceitar ? "success" : "info",
-          titulo: aceitar ? "Novo destino aceito" : "Novo destino recusado",
+          titulo: aceitar ? `Novo ${alvo} aceito` : `Novo ${alvo} recusado`,
           mensagem: aceitar
-            ? "A rota foi atualizada para o novo destino."
-            : "A corrida segue para o destino anterior.",
-          chave: `destino:${pedidoNovoDestino.id}:${aceitar}`,
+            ? `A rota foi atualizada para o novo ${alvo}.`
+            : `A corrida segue no ${alvo} anterior.`,
+          chave: `destino:${pedidoNovoDestino.id}:${aceitar ? "aceito" : "recusado"}`,
         });
       } catch (falha) {
         mostrarToast({
@@ -829,6 +1103,7 @@ export function useDespachoMotorista(pausado = false) {
         setOfertas([]);
         setDisponivel(true);
         recusadas.current.clear();
+        dispensadas.current.clear();
         setGatilho((atual) => atual + 1);
         await sincronizarSituacao();
         return { ok: true };
@@ -869,6 +1144,10 @@ export function useDespachoMotorista(pausado = false) {
     alternarDisponibilidade,
     aceitar,
     recusar,
+    dispensarChamada,
+    propor,
+    propostaEnviada,
+    propostasPendentes,
     recarregarOfertas,
     avancar,
     cancelarCorrida,

@@ -13,6 +13,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface Props {
   pedido: Pedido | null;
+  origem?: string | null;
+  paradasFeitas?: number;
   respondendo?: boolean;
   onResponder: (aceitar: boolean) => void;
 }
@@ -32,6 +34,8 @@ const segundosAte = (iso: string | null) => {
 // vendo o novo valor; sem resposta no prazo, o pedido expira no servidor
 export default function PedidoNovoDestino({
   pedido,
+  origem,
+  paradasFeitas = 0,
   respondendo = false,
   onResponder,
 }: Props) {
@@ -96,13 +100,39 @@ export default function PedidoNovoDestino({
             )}
           </View>
 
+          {origem ? (
+            <View style={styles.origemAtual}>
+              <View style={styles.pontoOrigem}>
+                <View style={styles.pontoOrigemCentro} />
+              </View>
+              <View style={styles.origemConteudo}>
+                <Text style={styles.origemRotulo}>Local de embarque</Text>
+                <Text numberOfLines={2} style={styles.origemEndereco}>
+                  {origem}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
           {pontos.map((ponto, indice) => {
             const ehDestino = indice === pontos.length - 1;
+            // o servidor mantém as paradas já feitas no começo do trajeto
+            const feita = !ehDestino && indice < paradasFeitas;
             return (
-              <View key={`${indice}-${ponto}`} style={styles.enderecoLinha}>
+              <View
+                key={`${indice}-${ponto}`}
+                style={styles.enderecoLinha}
+                accessibilityLabel={
+                  feita ? `Parada já feita: ${ponto}` : undefined
+                }
+              >
                 {ehDestino ? (
                   <View style={styles.pontoDestino}>
-                    <Ionicons name="arrow-down" size={12} color="#FFF" />
+                    <Ionicons name="flag" size={22} color="#111" />
+                  </View>
+                ) : feita ? (
+                  <View style={[styles.pontoParada, styles.pontoParadaFeita]}>
+                    <Ionicons name="checkmark" size={15} color="#FFF" />
                   </View>
                 ) : (
                   <View style={styles.pontoParada}>
@@ -111,10 +141,15 @@ export default function PedidoNovoDestino({
                 )}
                 <Text
                   numberOfLines={2}
-                  style={[styles.endereco, !ehDestino && styles.enderecoParada]}
+                  style={[
+                    styles.endereco,
+                    !ehDestino && styles.enderecoParada,
+                    feita && styles.enderecoFeito,
+                  ]}
                 >
                   {ponto}
                 </Text>
+                {feita && <Text style={styles.seloFeita}>Feita</Text>}
               </View>
             );
           })}
@@ -203,12 +238,33 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   prazoTexto: { fontSize: 14, fontWeight: "700", color: "#8A5A00" },
+  origemAtual: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  pontoOrigem: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#FFD600",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  pontoOrigemCentro: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#111",
+  },
+  origemConteudo: { flex: 1, gap: 2 },
+  origemRotulo: { fontSize: 12, fontWeight: "700", color: "#6B7280" },
+  origemEndereco: { fontSize: 15, fontWeight: "600", color: "#111", lineHeight: 20 },
   enderecoLinha: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   pontoDestino: {
     width: 22,
     height: 22,
-    borderRadius: 11,
-    backgroundColor: "#FF7A2F",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 1,
@@ -231,6 +287,14 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   pontoParadaTexto: { fontSize: 12, fontWeight: "700", color: "#111" },
+  pontoParadaFeita: { backgroundColor: "#9CA3AF" },
+  enderecoFeito: { color: "#9CA3AF", textDecorationLine: "line-through" },
+  seloFeita: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#6B7280",
+    marginTop: 3,
+  },
   valores: {
     flexDirection: "row",
     alignItems: "center",

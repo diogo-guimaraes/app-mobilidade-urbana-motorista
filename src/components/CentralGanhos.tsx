@@ -1,8 +1,13 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Text } from "@/components/common/Texto";
 import { api } from "@/Services/api";
+import {
+  carregarMetodosResgate,
+  formatarReais,
+  MetodoResgate,
+} from "@/domain/carteira";
 import {
   Animated,
   BackHandler,
@@ -13,7 +18,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import ConvidarMotorista from "./ConvidarMotorista";
 import HistoricoCorridas from "./HistoricoCorridas";
 import MetodosResgate from "./MetodoResgate";
 import MeuSaldo from "./MeuSaldo";
@@ -45,8 +49,6 @@ export default function CentralGanhos({
   } | null>(null);
 
   const [visibleMetodoResgate, setVisibleMetodoResgate] = useState(false);
-  const [visibleConvidadeMotorista, setVisibleConvidadeMotorista] =
-    useState(false);
 
   const mostrarMetodoResgate = () => {
     setVisibleMetodoResgate(true);
@@ -58,10 +60,6 @@ export default function CentralGanhos({
 
   const mostrarMeuSaldo = () => {
     setMeuSaldo(true);
-  };
-
-  const mostrarConvidadeMotorista = () => {
-    setVisibleConvidadeMotorista(true);
   };
 
   useEffect(() => {
@@ -79,24 +77,30 @@ export default function CentralGanhos({
     return () => subscription.remove();
   }, [visible, onClose]);
 
-  useEffect(() => {
-    if (!visible) return;
-    let ativo = true;
+  const [metodoPrincipal, setMetodoPrincipal] = useState<MetodoResgate | null>(
+    null,
+  );
+
+  // de novo ao voltar do saldo ou dos métodos: um saque ou um método novo
+  // muda o que aparece aqui
+  const recarregar = useCallback(() => {
     api
       .get<{ data: string; ganhos_do_dia: number; saldo: number }>(
         "/motorista/me/ganhos",
       )
-      .then(({ data }) => {
-        if (ativo) setGanhos(data);
-      })
+      .then(({ data }) => setGanhos(data))
       .catch(() => {});
-    return () => {
-      ativo = false;
-    };
-  }, [visible]);
+    carregarMetodosResgate()
+      .then((metodos) =>
+        setMetodoPrincipal(metodos.find((metodo) => metodo.principal) ?? null),
+      )
+      .catch(() => {});
+  }, []);
 
-  const formatarReais = (valor: number | undefined) =>
-    valor === undefined ? "—" : `R$${valor.toFixed(2).replace(".", ",")}`;
+  useEffect(() => {
+    if (visible) recarregar();
+  }, [visible, recarregar]);
+
 
   useEffect(() => {
     if (visible) {
@@ -220,7 +224,11 @@ export default function CentralGanhos({
                   </View>
                   <View>
                     <Text style={styles.resourceName}>Método de resgate</Text>
-                    <Text style={styles.resourceSubtext}>Conta bancária</Text>
+                    <Text style={styles.resourceSubtext} numberOfLines={1}>
+                      {metodoPrincipal
+                        ? metodoPrincipal.descricao
+                        : "Adicione uma chave Pix ou conta"}
+                    </Text>
                   </View>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#CCC" />
@@ -252,37 +260,28 @@ export default function CentralGanhos({
 
             <Text style={styles.sectionTitle}>Melhore seus ganhos</Text>
 
-            {/* RECOMPENSAS */}
-            <TouchableOpacity
-              onPress={mostrarConvidadeMotorista}
+            {/* RECOMPENSAS: ainda não existem. A indicação ficou escondida
+                (a tela prometia R$ 500 por convite que ninguém paga) */}
+            <View
               style={styles.improvementItem}
+              accessibilityLabel="Recompensas, em breve"
+              accessibilityState={{ disabled: true }}
             >
-              <View style={styles.row}>
-                <Ionicons name="megaphone-outline" size={24} color="#444" />
+              <View style={[styles.row, styles.improvementConteudo]}>
+                <Ionicons name="gift-outline" size={24} color="#9CA3AF" />
                 <View style={styles.improvementTextContent}>
-                  <Text style={styles.resourceName}>
-                    Recompensa por Indicação
+                  <Text style={[styles.resourceName, styles.emBreveNome]}>
+                    Recompensas
                   </Text>
-                  <Text style={styles.resourceSubtext}>
-                    Convide novos motoristas e aumente seus ganhos
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#CCC" />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.improvementItem}>
-              <View style={styles.row}>
-                <Ionicons name="gift-outline" size={24} color="#444" />
-                <View style={styles.improvementTextContent}>
-                  <Text style={styles.resourceName}>Recompensas</Text>
                   <Text style={styles.resourceSubtext}>
                     Confira suas recompensas mais recentes
                   </Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#CCC" />
-            </TouchableOpacity>
+              <View style={styles.emBreve}>
+                <Text style={styles.emBreveTexto}>Em breve</Text>
+              </View>
+            </View>
           </ScrollView>
         </Animated.View>
       </View>
@@ -290,14 +289,19 @@ export default function CentralGanhos({
         visible={historicoCorridas}
         onClose={() => setHistoricoCorridas(false)}
       />
-      <MeuSaldo visible={meuSaldo} onClose={() => setMeuSaldo(false)} />
+      <MeuSaldo
+        visible={meuSaldo}
+        onClose={() => {
+          setMeuSaldo(false);
+          recarregar();
+        }}
+      />
       <MetodosResgate
         visible={visibleMetodoResgate}
-        onClose={() => setVisibleMetodoResgate(false)}
-      />
-      <ConvidarMotorista
-        visible={visibleConvidadeMotorista}
-        onClose={() => setVisibleConvidadeMotorista(false)}
+        onClose={() => {
+          setVisibleMetodoResgate(false);
+          recarregar();
+        }}
       />
     </>
   );
@@ -437,6 +441,14 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: "#F0F0F0",
   },
+  emBreveNome: { color: "#6B7280" },
+  emBreve: {
+    borderRadius: 999,
+    backgroundColor: "#ECEDEF",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  emBreveTexto: { fontSize: 12, fontWeight: "700", color: "#6B7280" },
   improvementItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -446,5 +458,10 @@ const styles = StyleSheet.create({
   improvementTextContent: {
     marginLeft: 16,
     flex: 1,
+  },
+  // encolhe para o selo "Em breve" caber na tela
+  improvementConteudo: {
+    flex: 1,
+    marginRight: 12,
   },
 });

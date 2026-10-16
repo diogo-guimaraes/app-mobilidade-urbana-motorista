@@ -124,25 +124,24 @@ export default function MetodoResgateAdicionado({
             <View style={styles.infoItem}>
               <Text style={styles.bullet}>•</Text>
               <Text style={styles.infoText}>
-                Os resgates automáticos são feitos semanalmente, todas as
-                quartas-feiras. O processamento bancário normalmente leva de 1 a
-                2 dias.
+                Para sacar, vá em Ganhos {">"} Saldo {">"} Resgatar. O valor vai
+                para o seu método de resgate principal.
               </Text>
             </View>
 
             <View style={styles.infoItem}>
               <Text style={styles.bullet}>•</Text>
               <Text style={styles.infoText}>
-                Você pode escolher o método de resgate automático na área de
-                configurações no canto superior direito da página de saldo.
+                Você escolhe entre chave Pix e conta bancária em Configurações,
+                no canto superior direito da página de saldo.
               </Text>
             </View>
 
             <View style={styles.infoItem}>
               <Text style={styles.bullet}>•</Text>
               <Text style={styles.infoText}>
-                Após iniciar um resgate, fique atento às notificações do seu
-                aplicativo ou do seu banco.
+                Depois de pedir um saque, acompanhe o andamento na página de
+                saldo.
               </Text>
             </View>
           </View>

@@ -6,6 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Text } from "@/components/common/Texto";
+import MarcadorMinhaLocalizacao from "@/components/MarcadorMinhaLocalizacao";
 import {
   classificarFalhaLocalizacao,
   comTempoLimite,
@@ -24,7 +25,6 @@ import MapView, {
   Polyline,
   PROVIDER_GOOGLE,
   Region,
-  UserLocationChangeEvent,
 } from "react-native-maps";
 import Animated, {
   Extrapolation,
@@ -54,6 +54,14 @@ interface MapProps {
   // altura de um painel fixo no rodapé (ex.: "Buscando"), que fica por cima
   // da folha arrastável quando ela está recolhida
   alturaMinimaRodape?: number;
+  // botão flutuante extra, empilhado acima do "centralizar"
+  botaoAcima?: React.ReactNode;
+  // embarque, paradas e destino da chamada que está tocando
+  marcadores?: {
+    latitude: number;
+    longitude: number;
+    tipo: "origem" | "parada" | "destino";
+  }[];
 }
 
 // Sem posição ainda e sem cache, mostra o país inteiro em vez de 0,0 (que é
@@ -92,6 +100,8 @@ export default function Map({
   alvoEhDestino = false,
   alturaFolha = 0,
   alturaMinimaRodape = 0,
+  botaoAcima,
+  marcadores = [],
 }: MapProps) {
   const { height: alturaTela } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -188,8 +198,9 @@ export default function Map({
       .catch(() => {});
   }, []);
 
-  // Primeira posição real vem de quem responder antes: expo-location ou a
-  // camada "minha localização" do próprio Google Maps (onUserLocationChange).
+  // A posição do motorista vem apenas do expo-location. Evitar o listener
+  // nativo do mapa impede o evento topUserLocationChange incompatível com
+  // React Fabric em parte dos Androids.
   const registrarPosicao = useCallback(
     (coords: { latitude: number; longitude: number }) => {
       if (!pontoMapaValido(coords)) return;
@@ -225,6 +236,7 @@ export default function Map({
 
   useEffect(() => {
     let montado = true;
+    let assinatura: Location.LocationSubscription | null = null;
 
     (async () => {
       try {
@@ -243,6 +255,17 @@ export default function Map({
         setBuscandoPosicao(true);
         const posicao = await obterPosicaoAtual();
         if (montado) registrarPosicao(posicao.coords);
+
+        assinatura = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 8_000,
+            distanceInterval: 20,
+          },
+          (novaPosicao) => {
+            if (montado) registrarPosicao(novaPosicao.coords);
+          },
+        );
       } catch (erro) {
         if (!montado || temPosicaoReal.current) return;
 
@@ -258,6 +281,7 @@ export default function Map({
 
     return () => {
       montado = false;
+      assinatura?.remove();
     };
   }, [obterPosicaoAtual, registrarPosicao, tentativaLocalizacao]);
 
@@ -275,11 +299,6 @@ export default function Map({
     });
     return () => assinatura.remove();
   }, [permissao, localizacaoIndisponivel]);
-
-  const handleUserLocationChange = (event: UserLocationChangeEvent) => {
-    const { coordinate } = event.nativeEvent;
-    if (coordinate) registrarPosicao(coordinate);
-  };
 
   const ativarLocalizacao = async () => {
     if (Platform.OS === "android") {
@@ -356,9 +375,8 @@ export default function Map({
         onRegionChangeComplete={(regiao) => {
           onRegionChange(regiao);
         }}
-        showsUserLocation={permissao === "concedida"}
+        showsUserLocation={false}
         showsMyLocationButton={false}
-        onUserLocationChange={handleUserLocationChange}
         followsUserLocation={false}
         mapType="standard"
         userInterfaceStyle="light"
@@ -366,6 +384,10 @@ export default function Map({
         onMapReady={mapaPronto}
         onMapLoaded={mapaCarregado}
       >
+        {userLocation && (
+          <MarcadorMinhaLocalizacao coordenada={userLocation} />
+        )}
+
         {rota.length > 1 && (
           <Polyline
             key={chaveRota}
@@ -375,6 +397,40 @@ export default function Map({
             zIndex={10}
           />
         )}
+
+        {marcadores.map((ponto, indice) => (
+          <Marker
+            key={`${ponto.tipo}:${indice}:${ponto.latitude},${ponto.longitude}`}
+            coordinate={ponto}
+            anchor={{ x: 0.5, y: 0.5 }}
+            // com false o Android desenhava o círculo antes do ícone carregar
+            tracksViewChanges
+            zIndex={20}
+          >
+            <View
+              style={[
+                styles.marcadorPonto,
+                ponto.tipo === "origem"
+                  ? styles.marcadorEmbarque
+                  : ponto.tipo === "destino"
+                    ? styles.marcadorDestino
+                    : styles.marcadorParada,
+              ]}
+            >
+              <MaterialIcons
+                name={
+                  ponto.tipo === "origem"
+                    ? "arrow-upward"
+                    : ponto.tipo === "destino"
+                      ? "arrow-downward"
+                      : "more-horiz"
+                }
+                size={20}
+                color="#FFF"
+              />
+            </View>
+          </Marker>
+        ))}
 
         {alvo && (
           <Marker
@@ -444,6 +500,7 @@ export default function Map({
         <Animated.View
           style={[styles.centerButtonContainer, estiloPosicaoCentralizar]}
         >
+          {botaoAcima}
           <TouchableOpacity
             accessibilityLabel="Centralizar na minha localização"
             accessibilityRole="button"
@@ -512,10 +569,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
   },
   avisoBotaoTexto: { color: "#FFF", fontSize: 14, fontWeight: "600" },
+  marcadorPonto: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#FFF",
+  },
+  marcadorEmbarque: { backgroundColor: "#17C08A" },
+  marcadorDestino: { backgroundColor: "#F2662F" },
+  marcadorParada: { backgroundColor: "#6B7280" },
   centerButtonContainer: {
     position: "absolute",
     right: 16,
     zIndex: 20,
+    gap: 12,
   },
   centerButton: {
     backgroundColor: "white",

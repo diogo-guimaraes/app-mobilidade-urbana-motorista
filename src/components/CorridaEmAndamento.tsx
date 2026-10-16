@@ -2,6 +2,7 @@
 // numa pílula escura no topo, faixa laranja da taxa de espera, relógio em
 // anel, passageiro e "Iniciar corrida". O ≡ abre a tela Mais (cancelar com
 // motivo, ausência do passageiro, recusar novas corridas).
+import BotaoChatPassageiro from "@/components/BotaoChatPassageiro";
 import AnelProgresso from "@/components/AnelProgresso";
 import BotaoDeslizar from "@/components/BotaoDeslizar";
 import MaisCorridaAtiva from "@/components/MaisCorridaAtiva";
@@ -33,6 +34,7 @@ export type AcaoCorrida =
 
 export interface PassageiroDaCorrida {
   nome: string;
+  solicitante?: string | null;
   foto?: string | null;
   foto_oculta?: boolean;
   telefone?: string | null;
@@ -52,6 +54,9 @@ interface props {
   onCancelar: (motivo: string) => Promise<ResultadoCancelamento>;
   onCancelarNaoComparecimento: () => Promise<ResultadoCancelamento>;
   onAlternarRecusarNovas?: () => void;
+  // conversa com o passageiro (ChatDaCorrida, aberto pela home)
+  chatNaoLidas?: number;
+  onAbrirChat?: () => void;
 }
 
 // o backend só aceita encerrar por ausência depois de 3 min no embarque
@@ -85,6 +90,8 @@ export default function CorridaEmAndamento({
   onCancelar,
   onCancelarNaoComparecimento,
   onAlternarRecusarNovas,
+  chatNaoLidas = 0,
+  onAbrirChat,
 }: props) {
   const insets = useSafeAreaInsets();
   const { height: alturaTela } = useWindowDimensions();
@@ -265,8 +272,20 @@ export default function CorridaEmAndamento({
                   <Ionicons name="chevron-forward" size={16} color="#666" />
                 </View>
                 <Text style={styles.passageiroApoio}>{reputacao}</Text>
+                {passageiro?.solicitante ? (
+                  <Text numberOfLines={1} style={styles.passageiroApoio}>
+                    Pedido por {passageiro.solicitante}
+                  </Text>
+                ) : null}
               </TouchableOpacity>
 
+              {onAbrirChat ? (
+                <BotaoChatPassageiro
+                  naoLidas={chatNaoLidas}
+                  onPress={onAbrirChat}
+                  estilo={styles.botaoLigar}
+                />
+              ) : null}
               {passageiro?.telefone ? (
                 <TouchableOpacity
                   style={styles.botaoLigar}

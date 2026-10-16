@@ -4,6 +4,9 @@ import AvaliarPassageiro from "@/components/AvaliarPassageiro";
 import CorridaEmAndamento from "@/components/CorridaEmAndamento";
 import NavegacaoAtiva from "@/components/NavegacaoAtiva";
 import PedidoNovoDestino from "@/components/PedidoNovoDestino";
+import BotaoEmpilharNegociadas from "@/components/BotaoEmpilharNegociadas";
+import { AguardandoPagamentoNegocia } from "@/components/NegociaMotorista";
+import PilhaPropostasNegocia from "@/components/PilhaPropostasNegocia";
 import FolhaInferiorMotorista from "@/components/FolhaInferiorMotorista";
 import GanhoDiario from "@/components/GanhoDiario";
 import Map from "@/components/Map";
@@ -17,8 +20,16 @@ import { Text } from "@/components/common/Texto";
 import SimuladorCorridaMotorista from "@/components/desenvolvimento/SimuladorCorridaMotorista";
 import { useAuth } from "@/context/AuthProvider";
 import { useAvaliacaoPendente } from "@/hooks/useAvaliacaoPendente";
-import { useDespachoMotorista } from "@/hooks/useDespachoMotorista";
+import {
+  type OfertaCorrida,
+  useDespachoMotorista,
+} from "@/hooks/useDespachoMotorista";
+import { useEmpilharNegociadas } from "@/hooks/useEmpilharNegociadas";
 import { useRotaDaCorrida } from "@/hooks/useRotaDaCorrida";
+import { useRotaDaOferta } from "@/hooks/useRotaDaOferta";
+import { useChatDaCorrida } from "@/hooks/useChatDaCorrida";
+import ChatDaCorrida from "@/components/ChatDaCorrida";
+import OfertaNegociaMotorista from "@/components/OfertaNegociaMotorista";
 import { useSimuladorCorridaMotorista } from "@/hooks/useSimuladorCorridaMotorista";
 import { proximoPontoDaCorrida } from "@/domain/rotaDaCorrida";
 import { useRouter } from "expo-router";
@@ -49,6 +60,7 @@ export default function Home() {
   const [destinationModalVisible, setDestinationModalVisible] = useState(false);
   const [solicitacoesCorrida, setSolicitacoesCorrida] = useState(false);
   const simuladorCorrida = useSimuladorCorridaMotorista();
+  const { empilhar, alternar: alternarEmpilhar } = useEmpilharNegociadas();
   const {
     disponivel,
     oferta,
@@ -64,6 +76,9 @@ export default function Home() {
     alternarDisponibilidade,
     aceitar,
     recusar,
+    dispensarChamada,
+    propor,
+    propostasPendentes,
     recarregarOfertas,
     avancar,
     cancelarCorrida,
@@ -103,7 +118,34 @@ export default function Home() {
         }
       : null;
   const ocupadoExibido = simuladorCorrida.ativa ? false : ocupado;
+  // a chamada que está tocando: o mapa mostra o trajeto dela acima do card
+  const chamadaNoMapa = ofertaExibida !== null && corridaExibida === null;
+  const { rota: rotaDaOferta, pontos: pontosDaOferta } = useRotaDaOferta(
+    chamadaNoMapa && !simuladorCorrida.ativa ? ofertaExibida : null,
+  );
+  const [alturaDaChamada, setAlturaDaChamada] = useState(0);
+  // Negocia: o lápis do card abre o valor livre (fica aberto mesmo se a
+  // chamada sumir; a corrida continua na lista de Solicitações)
+  const [valorLivre, setValorLivre] = useState<OfertaCorrida | null>(null);
+  // conversa com o passageiro da corrida atual (backend: ChatCorridaController)
+  const [chatAberto, setChatAberto] = useState(false);
+  const chat = useChatDaCorrida(
+    simuladorCorrida.ativa ? null : (corridaExibida?.id ?? null),
+    chatAberto,
+  );
+  const abrirChat = () => {
+    chat.marcarLidas();
+    setChatAberto(true);
+  };
   const disponivelExibido = simuladorCorrida.ativa ? false : disponivel;
+
+  // a lista de solicitações fecha quando uma corrida começa; sem isso ela
+  // continuava "aberta" por baixo e voltava à tela quando a corrida acabava
+  useEffect(() => {
+    if (corridaExibida === null) return;
+    const fechar = setTimeout(() => setSolicitacoesCorrida(false), 0);
+    return () => clearTimeout(fechar);
+  }, [corridaExibida]);
 
   const statusNavegacao =
     corridaExibida?.status_corrida === "aceita" ||
@@ -115,6 +157,13 @@ export default function Home() {
   // menu e do atalho de ganhos
   const esperandoNoEmbarque =
     corridaExibida?.status_corrida === "motorista_chegou";
+  // esperando o pagamento do Negocia a tela tem o mesmo formato
+  const telaDeEspera =
+    esperandoNoEmbarque ||
+    corridaExibida?.status_corrida === "aguardando_pagamento";
+  const embarqueDaCorrida =
+    corridaExibida?.corrida_destinos?.find((ponto) => ponto.tipo === "origem")
+      ?.endereco ?? null;
   const proximoPonto = proximoPontoDaCorrida(corridaExibida);
   const { rota: rotaDaCorrida, alvo: alvoDaCorrida } = useRotaDaCorrida(
     statusComNavegacao || simuladorCorrida.ativa ? null : corridaExibida,
@@ -245,18 +294,31 @@ export default function Home() {
           // já no embarque não há o que traçar: a rota de poucos metros
           // dava a volta no quarteirão por causa da mão da rua
           rota={
-            corridaExibida?.status_corrida === "motorista_chegou"
-              ? []
-              : rotaDaCorrida
+            chamadaNoMapa
+              ? rotaDaOferta
+              : corridaExibida?.status_corrida === "motorista_chegou"
+                ? []
+                : rotaDaCorrida
           }
-          alvo={alvoDaCorrida}
+          alvo={chamadaNoMapa ? null : alvoDaCorrida}
           alvoEhDestino={false}
+          marcadores={chamadaNoMapa ? pontosDaOferta : []}
           alturaFolha={
-            corridaExibida?.status_corrida === "motorista_chegou"
+            telaDeEspera
               ? ALTURA_FOLHA_ESPERA
-              : corridaExibida === null
-                ? 0
-                : ALTURA_FOLHA_CORRIDA
+              : chamadaNoMapa
+                ? alturaDaChamada
+                : corridaExibida === null
+                  ? 0
+                  : ALTURA_FOLHA_CORRIDA
+          }
+          botaoAcima={
+            corridaExibida === null && !chamadaNoMapa ? (
+              <BotaoEmpilharNegociadas
+                ativo={empilhar}
+                onAlternar={alternarEmpilhar}
+              />
+            ) : undefined
           }
         />
       )}
@@ -304,6 +366,8 @@ export default function Home() {
           onCancelar={
             simuladorCorrida.ativa ? simuladorCorrida.cancelar : cancelarCorrida
           }
+          chatNaoLidas={chat.naoLidas}
+          onAbrirChat={simuladorCorrida.ativa ? undefined : abrirChat}
         />
       )}
 
@@ -336,6 +400,8 @@ export default function Home() {
           onAlternarRecusarNovas={
             simuladorCorrida.ativa ? () => undefined : alternarRecusarNovas
           }
+          chatNaoLidas={chat.naoLidas}
+          onAbrirChat={simuladorCorrida.ativa ? undefined : abrirChat}
         />
       )}
 
@@ -350,6 +416,18 @@ export default function Home() {
           />
         )}
 
+      {/* Negocia: propostas esperando o passageiro, no topo; a chamada da vez
+          continua chegando embaixo */}
+      {!simuladorCorrida.ativa &&
+        empilhar &&
+        corridaExibida === null &&
+        propostasPendentes.length > 0 && (
+          <PilhaPropostasNegocia
+            propostas={propostasPendentes}
+            chamadaNaTela={ofertaExibida !== null}
+          />
+        )}
+
       {ofertaExibida !== null && corridaExibida === null && (
         <RecebendoChamada
           key={ofertaExibida.corrida_id}
@@ -359,6 +437,20 @@ export default function Home() {
           origem={ofertaExibida.origem}
           destino={ofertaExibida.destino}
           paradas={ofertaExibida.paradas}
+          paraOutraPessoa={ofertaExibida.para_outra_pessoa}
+          categoria={ofertaExibida.categoria}
+          metodoPagamento={ofertaExibida.metodo_pagamento}
+          negociavel={
+            !simuladorCorrida.ativa && ofertaExibida.negociavel === true
+          }
+          onPropor={(valorMotorista) =>
+            void propor(ofertaExibida.corrida_id, valorMotorista)
+          }
+          onExpirar={
+            !simuladorCorrida.ativa && ofertaExibida.negociavel === true
+              ? () => dispensarChamada(ofertaExibida.corrida_id)
+              : undefined
+          }
           notaPassageiro={ofertaExibida.passageiro_nota}
           corridasPassageiro={ofertaExibida.passageiro_corridas}
           onAceitar={
@@ -367,16 +459,46 @@ export default function Home() {
           onRecusar={
             simuladorCorrida.ativa ? simuladorCorrida.encerrar : recusar
           }
+          onEditarValor={
+            !simuladorCorrida.ativa && ofertaExibida.negociavel === true
+              ? () => setValorLivre(ofertaExibida)
+              : undefined
+          }
+          onAlturaChange={setAlturaDaChamada}
         />
       )}
+
+      <ChatDaCorrida
+        visible={chatAberto && corridaExibida !== null}
+        onClose={() => {
+          chat.marcarLidas();
+          setChatAberto(false);
+        }}
+        nomeDoOutro={passageiroExibido?.nome ?? "Passageiro"}
+        mensagens={chat.mensagens}
+        podeEnviar={chat.podeEnviar}
+        onEnviar={(texto) => void chat.enviar(texto)}
+        onReenviar={(mensagem) => void chat.reenviar(mensagem)}
+      />
+
+      <OfertaNegociaMotorista
+        oferta={valorLivre}
+        ocupado={ocupadoExibido}
+        onClose={() => setValorLivre(null)}
+        onConfirmar={async (corridaId, valorMotorista) => {
+          setValorLivre(null);
+          await propor(corridaId, valorMotorista);
+        }}
+      />
 
       <GanhoDiario
         visible={ganhoModalVisivel}
         setVisible={setGanhoModalVisivel}
         corridaAtivaId={corridaExibida?.id ?? null}
-        ocultarAtalho={esperandoNoEmbarque}
+        ocultarAtalho={telaDeEspera || chamadaNoMapa}
       />
-      {!statusComNavegacao && !esperandoNoEmbarque && (
+      {/* com a chamada na tela o topo fica livre, como no 99 */}
+      {!statusComNavegacao && !telaDeEspera && !chamadaNoMapa && (
         <TopMenu onMenuPress={handleMenuOpen} />
       )}
 
@@ -430,6 +552,9 @@ export default function Home() {
               setSolicitacoesCorrida(false);
               void aceitar(corridaId);
             }}
+            onPropor={(corridaId, valorMotorista) =>
+              propor(corridaId, valorMotorista)
+            }
             onRecusar={(corridaId) => recusar(corridaId)}
           />
 
@@ -444,8 +569,28 @@ export default function Home() {
         </>
       )}
 
+      {corridaExibida?.status_corrida === "aguardando_pagamento" && (
+        <AguardandoPagamentoNegocia
+          valorMotorista={corridaExibida.corrida_financeiro?.valor_motorista}
+          metodoPagamento={corridaExibida.metodo_pagamento}
+          origem={
+            corridaExibida.corrida_destinos?.find((d) => d.tipo === "origem")
+              ?.endereco
+          }
+          passageiro={passageiroExibido}
+          aceitaEm={corridaExibida.tempo_aceite}
+          pagamentoExpiraEm={corridaExibida.pagamento_expira_em}
+        />
+      )}
+
       <PedidoNovoDestino
         pedido={simuladorCorrida.ativa ? null : pedidoNovoDestino}
+        origem={embarqueDaCorrida}
+        paradasFeitas={
+          corridaExibida?.corrida_destinos?.filter(
+            (ponto) => ponto.tipo === "parada" && ponto.concluida_em,
+          ).length ?? 0
+        }
         respondendo={respondendoPedido}
         onResponder={(aceitar) => void responderNovoDestino(aceitar)}
       />
