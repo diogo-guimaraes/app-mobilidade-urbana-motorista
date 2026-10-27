@@ -38,6 +38,7 @@ const ICONE_MOVIMENTO: Record<
 > = {
   corrida: "car",
   taxa_dinheiro: "cash",
+  taxa_cancelamento: "cash-plus",
   saque: "bank-transfer-out",
 };
 
@@ -162,6 +163,11 @@ export default function MeuSaldo({ visible, onClose, duration = 200 }: props) {
   if (!isMounted) return null;
 
   const grupos = agruparPorDia(carteira?.movimentos ?? []);
+  // sem saldo para o mínimo do saque o botão não engana o motorista
+  const podeResgatar =
+    carteira !== null &&
+    carteira.disponivel_para_saque > 0 &&
+    carteira.disponivel_para_saque >= carteira.valor_minimo;
 
   return (
     <>
@@ -209,6 +215,13 @@ export default function MeuSaldo({ visible, onClose, duration = 200 }: props) {
                   Corridas pagas no app entram no saldo. Nas corridas em
                   dinheiro, a taxa da plataforma é descontada daqui.
                 </Text>
+                {carteira && carteira.saldo < 0 && (
+                  <Text style={styles.avisoNegativo}>
+                    O saldo está negativo por causa das taxas de corridas em
+                    dinheiro: você já recebeu o valor delas em mãos. O valor é
+                    abatido das próximas corridas pagas pelo app.
+                  </Text>
+                )}
                 {erroCarteira && (
                   <Text style={styles.erroTexto} accessibilityRole="alert">
                     Não foi possível atualizar o saldo.
@@ -218,12 +231,20 @@ export default function MeuSaldo({ visible, onClose, duration = 200 }: props) {
 
               <TouchableOpacity
                 onPress={mostrarSacarSaldo}
-                disabled={!carteira}
+                disabled={!podeResgatar}
                 accessibilityRole="button"
-                style={[styles.btnResgatar, !carteira && styles.btnInativo]}
+                accessibilityState={{ disabled: !podeResgatar }}
+                style={[styles.btnResgatar, !podeResgatar && styles.btnInativo]}
               >
                 <Text style={styles.btnResgatarText}>Resgatar</Text>
               </TouchableOpacity>
+              {carteira && !podeResgatar && (
+                <Text style={styles.resgateIndisponivel}>
+                  {`O resgate fica disponível a partir de ${formatarReais(
+                    Math.max(carteira.valor_minimo, 0.01),
+                  )} de saldo.`}
+                </Text>
+              )}
 
               <MaterialCommunityIcons
                 name="currency-usd"
@@ -263,7 +284,7 @@ export default function MeuSaldo({ visible, onClose, duration = 200 }: props) {
                         <View style={styles.itemLeft}>
                           <View style={styles.iconCircle}>
                             <MaterialCommunityIcons
-                              name={ICONE_MOVIMENTO[item.tipo]}
+                              name={ICONE_MOVIMENTO[item.tipo] ?? "cash"}
                               size={22}
                               color="#444"
                             />
@@ -275,6 +296,18 @@ export default function MeuSaldo({ visible, onClose, duration = 200 }: props) {
                             <Text style={styles.itemTime} numberOfLines={1}>
                               {hora(item.quando)} · {situacao}
                             </Text>
+                            {typeof item.recebido_em_maos === "number" && (
+                              <Text style={styles.recebidoEmMaos}>
+                                Você recebeu{" "}
+                                {formatarReais(item.recebido_em_maos)} em
+                                dinheiro
+                              </Text>
+                            )}
+                            {typeof item.saldo_apos === "number" && (
+                              <Text style={styles.saldoApos}>
+                                Saldo: {formatarReais(item.saldo_apos)}
+                              </Text>
+                            )}
                           </View>
                         </View>
                         <View style={styles.itemRight}>
@@ -393,6 +426,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
   },
+  avisoNegativo: {
+    color: "#8A6100",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 8,
+  },
+  saldoApos: { color: "#6B7280", fontSize: 12, marginTop: 2 },
+  recebidoEmMaos: { color: "#18794E", fontSize: 12, marginTop: 2 },
   subText: {
     fontSize: 13,
     color: "#999",
@@ -466,6 +507,12 @@ const styles = StyleSheet.create({
   },
   btnInativo: {
     opacity: 0.5,
+  },
+  resgateIndisponivel: {
+    color: "#6B7280",
+    fontSize: 12,
+    marginTop: 8,
+    textAlign: "center",
   },
   erroTexto: {
     fontSize: 13,

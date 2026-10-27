@@ -74,15 +74,22 @@ export function useChatDaCorrida(corridaId: number | null, aberto: boolean) {
   );
   const [podeEnviar, setPodeEnviar] = useState(false);
   const [vistoAte, setVistoAte] = useState(0);
+  // primeira busca da corrida feita: o que veio nela é histórico, não aviso
+  const [carregadaDe, setCarregadaDe] = useState<number | null>(null);
   const ultimoId = useRef(0);
 
   const guardar = useCallback(
-    (novas: MensagemDaCorrida[]) => {
-      novas.forEach((item) => {
-        if (item.id !== null && item.id > ultimoId.current) {
-          ultimoId.current = item.id;
-        }
-      });
+    (novas: MensagemDaCorrida[], atualizarCursor = true) => {
+      // A resposta do POST pode ter um id maior que uma mensagem do outro
+      // participante que ainda não foi consultada. Avançar o cursor nesse
+      // ponto faria a próxima busca pular essa mensagem.
+      if (atualizarCursor) {
+        novas.forEach((item) => {
+          if (item.id !== null && item.id > ultimoId.current) {
+            ultimoId.current = item.id;
+          }
+        });
+      }
       setMensagens((atuais) => mesclar(atuais, novas));
     },
     [setMensagens],
@@ -102,6 +109,7 @@ export function useChatDaCorrida(corridaId: number | null, aberto: boolean) {
       );
       setPodeEnviar(data.pode_enviar);
       guardar(data.data);
+      setCarregadaDe(corridaId);
     } catch {
       // a próxima rodada tenta de novo
     }
@@ -161,11 +169,12 @@ export function useChatDaCorrida(corridaId: number | null, aberto: boolean) {
     ).catch(() => {});
   }, [corridaId, ultimaRecebida, vistoAte]);
 
-  const naoLidas = aberto
-    ? 0
+  const recebidasNaoLidas = aberto
+    ? []
     : mensagens.filter(
         (item) => !ehMinha(item) && item.id !== null && item.id > vistoAte,
-      ).length;
+      );
+  const naoLidas = recebidasNaoLidas.length;
 
   const mandar = useCallback(
     async (mensagem: MensagemDaCorrida) => {
@@ -182,7 +191,9 @@ export function useChatDaCorrida(corridaId: number | null, aberto: boolean) {
             client_message_id: mensagem.client_message_id,
           },
         );
-        guardar([data.data]);
+        // O cursor é atualizado apenas pelo GET, que devolve todas as
+        // mensagens posteriores em ordem e não deixa lacunas na conversa.
+        guardar([data.data], false);
         return true;
       } catch {
         setMensagens((atuais) =>
@@ -212,9 +223,12 @@ export function useChatDaCorrida(corridaId: number | null, aberto: boolean) {
   );
 
   return {
+    corridaId,
     mensagens,
     podeEnviar,
     naoLidas,
+    recebidasNaoLidas,
+    carregada: corridaId !== null && carregadaDe === corridaId,
     enviar,
     reenviar: mandar,
     marcarLidas,
