@@ -1,3 +1,4 @@
+import { useTema } from "@/theme/tema";
 import { Text } from "@/components/common/Texto";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -31,6 +32,7 @@ export default function MenuInferiorMotorista({
   onAlternarDisponibilidade,
   onAlturaChange,
 }: props) {
+  const { cores } = useTema();
   const [dialogPreferenciasVisible, setDialogPreferenciasVisibleLocal] =
     useState(false);
 
@@ -90,7 +92,10 @@ export default function MenuInferiorMotorista({
 
       <SafeAreaView
         edges={["bottom"]}
-        style={styles.bottomMenuWrapper}
+        style={[
+          styles.bottomMenuWrapper,
+          { backgroundColor: cores.superficie, borderTopColor: cores.borda },
+        ]}
         onLayout={({ nativeEvent }) =>
           onAlturaChange?.(Math.ceil(nativeEvent.layout.height))
         }
@@ -102,7 +107,7 @@ export default function MenuInferiorMotorista({
             onPress={MostrarPreferencias}
             activeOpacity={0.8}
           >
-            <Ionicons name="options-outline" size={32} color="#000" />
+            <Ionicons name="options-outline" size={32} color={cores.icone} />
             {/* 🔴 Pontinho vermelho de status */}
             <View
               style={[
@@ -134,7 +139,11 @@ export default function MenuInferiorMotorista({
             onPress={setSolicitacoesCorrida}
             activeOpacity={0.8}
           >
-            <Ionicons name="document-text-outline" size={32} color="#000" />
+            <Ionicons
+              name="document-text-outline"
+              size={32}
+              color={cores.icone}
+            />
           </TouchableOpacity>
         </View>
       </SafeAreaView>

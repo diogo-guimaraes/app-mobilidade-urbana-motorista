@@ -1,4 +1,5 @@
 // CODEX: contagem pendente; recupera carregamento e limita enquadramento à área visível. Remover após validação/commit.
+import { useTema } from "@/theme/tema";
 import { useCarregamentoMapa } from "@/hooks/useCarregamentoMapa";
 import { paddingMapa, pontoMapaValido } from "@/domain/visualizacaoMapa";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -110,6 +111,7 @@ export default function Map({
 }: MapProps) {
   const { height: alturaTela } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const tema = useTema();
   const mapRef = useRef<MapView>(null);
   const [userLocation, setUserLocation] = useState<Region | null>(null);
   const [permissao, setPermissao] = useState<Permissao>("verificando");
@@ -433,7 +435,8 @@ export default function Map({
         showsMyLocationButton={false}
         followsUserLocation={false}
         mapType="standard"
-        userInterfaceStyle="light"
+        userInterfaceStyle={tema.mapa.userInterfaceStyle}
+        customMapStyle={tema.mapa.customMapStyle}
         onLayout={({ nativeEvent }) => setDimensoesMapa(nativeEvent.layout)}
         onMapReady={mapaPronto}
         onMapLoaded={mapaCarregado}

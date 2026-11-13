@@ -8,6 +8,7 @@
 // - Voz guiando as manobras (precisa de TTS + lógica de quando anunciar).
 // Paradas: em viagem o alvo é a próxima parada pendente e o botão vira
 // "Confirmar parada" (POST confirmar-parada) até sobrar só o destino.
+import { useTema } from "@/theme/tema";
 import BotaoChatPassageiro from "@/components/BotaoChatPassageiro";
 import BotaoDeslizar from "@/components/BotaoDeslizar";
 import ListaParadasDoGrupo from "@/components/ListaParadasDoGrupo";
@@ -243,6 +244,7 @@ export default function NavegacaoAtiva({
   );
   const corDoAlvo = tipoAlvo === "origem" ? "#18C9A0" : "#FF7A2F";
   const insets = useSafeAreaInsets();
+  const tema = useTema();
   const { height: alturaTela } = useWindowDimensions();
   const mapRef = useRef<MapView>(null);
   const mapaPronto = useRef(false);
@@ -612,7 +614,8 @@ export default function NavegacaoAtiva({
               }
             : undefined
         }
-        userInterfaceStyle="light"
+        userInterfaceStyle={tema.mapa.userInterfaceStyle}
+        customMapStyle={tema.mapa.customMapStyle}
         showsCompass={false}
         pitchEnabled={false}
         showsBuildings={false}
