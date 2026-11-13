@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import DetalhesComentario from "./DetalhesComentario";
 import DicasAvaliacao from "./DicasAvaliacao";
+import PerfilPublico from "./PerfilPublico";
 import MeuPerfil from "./MeuPerfil";
 import ModalSelos from "./ModalSelos";
 import NotasAgradecimentos from "./NotasAgradecimentos";
@@ -65,6 +66,7 @@ export default function PerfilUsuario({
   const [showDetalhesComentario, setShowDetalhesComentarioSelecionado] =
     useState(false);
   const [showDicasAvaliacao, setShowDicasAvaliacao] = useState(false);
+  const [showPerfilPublico, setShowPerfilPublico] = useState(false);
 
   // Dados Mockados para as novas seções
   const avaliacoesPositivas = [
@@ -241,7 +243,10 @@ export default function PerfilUsuario({
                 style={styles.mainAvatar}
               />
               <Text style={styles.userName}>Diogo</Text>
-              <TouchableOpacity style={styles.publicProfileBtn}>
+              <TouchableOpacity
+                style={styles.publicProfileBtn}
+                onPress={() => setShowPerfilPublico(true)}
+              >
                 <Text style={styles.publicProfileText}>Ver perfil público</Text>
               </TouchableOpacity>
             </View>
@@ -438,6 +443,10 @@ export default function PerfilUsuario({
         <DicasAvaliacao
           visible={showDicasAvaliacao}
           onClose={() => setShowDicasAvaliacao(false)}
+        />
+        <PerfilPublico
+          visible={showPerfilPublico}
+          onClose={() => setShowPerfilPublico(false)}
         />
       </View>
     </>
