@@ -43,7 +43,12 @@ export function useAvaliacaoPendente(recarregarQuando: unknown) {
     if (anterior !== null && recarregarQuando === null) setVerificando(true);
   }
 
-  const buscar = useCallback(async () => {
+  // `terminadaId`: a corrida que acabou de terminar. O servidor devolve a
+  // finalizada mais recente que ainda está sem nota, e corridas antigas nunca
+  // avaliadas ficam pendentes lá para sempre: sem esse filtro, avaliar uma
+  // corrida abria a tela de outra, mais velha, em seguida. Só vale a corrida
+  // que terminou agora ou, na compartilhada, o próximo passageiro do grupo.
+  const buscar = useCallback(async (terminadaId: number | null) => {
     try {
       const { data } = await api.get<{
         corrida: CorridaParaAvaliar | null;
@@ -53,7 +58,11 @@ export function useAvaliacaoPendente(recarregarQuando: unknown) {
       const pendente =
         data?.avaliando_como === "motorista" ? (data?.corrida ?? null) : null;
 
-      if (pendente === null) {
+      const dasessao =
+        pendente !== null &&
+        (pendente.id === terminadaId || pendente.compartilhada != null);
+
+      if (pendente === null || !dasessao) {
         setCorrida(null);
         return;
       }
@@ -75,14 +84,14 @@ export function useAvaliacaoPendente(recarregarQuando: unknown) {
   const corridaAnterior = useRef<unknown>(recarregarQuando);
 
   useEffect(() => {
-    const terminou =
-      corridaAnterior.current !== null && recarregarQuando === null;
+    const terminada = corridaAnterior.current;
+    const terminou = terminada !== null && recarregarQuando === null;
 
     corridaAnterior.current = recarregarQuando;
 
     if (!terminou) return;
 
-    const timer = setTimeout(() => void buscar(), 0);
+    const timer = setTimeout(() => void buscar(Number(terminada)), 0);
 
     return () => clearTimeout(timer);
   }, [buscar, recarregarQuando]);
@@ -136,8 +145,9 @@ export function useAvaliacaoPendente(recarregarQuando: unknown) {
           titulo: "Avaliação enviada",
           mensagem: `Corrida ${corrida.codigo_corrida}.`,
         });
-        // compartilhada: cada passageiro do grupo tem a própria janela, em seguida
-        await buscar();
+        // compartilhada: cada passageiro do grupo tem a própria janela, em
+        // seguida. Corrida comum acaba aqui: nada de abrir outra
+        if (corrida.compartilhada != null) await buscar(null);
 
         return true;
       } catch {
