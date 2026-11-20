@@ -12,7 +12,6 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Ionicons } from "@expo/vector-icons";
 import { Text } from "@/components/common/Texto";
 import {
   ActivityIndicator,
@@ -25,8 +24,8 @@ import {
 import type { SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// alça da folha, acima do conteúdo (com os dois ícones nas pontas)
-const ALTURA_ALCA = 48;
+// alça da folha, acima do conteúdo
+const ALTURA_ALCA = 24;
 // aberta, a folha para quase no topo: abaixo da barra de status e com um
 // pouco do mapa à vista
 const FOLGA_NO_TOPO = 12;
@@ -110,14 +109,8 @@ function DegradeDeCima({
   );
 }
 
-// a alça: o traço no meio e, nas pontas, um ícone de ajustes e um de lista
-function AlcaDaFolha({
-  escuro,
-  corIcone,
-}: {
-  escuro: boolean;
-  corIcone: string;
-}) {
+// a alça: só o traço no meio
+function AlcaDaFolha({ escuro }: { escuro: boolean }) {
   return (
     <View style={styles.alca}>
       <View
@@ -126,12 +119,6 @@ function AlcaDaFolha({
           { backgroundColor: escuro ? "#6B727D" : "#C9CDD2" },
         ]}
       />
-      <View style={[styles.alcaIcone, styles.alcaIconeEsquerda]}>
-        <Ionicons name="options-outline" size={32} color={corIcone} />
-      </View>
-      <View style={[styles.alcaIcone, styles.alcaIconeDireita]}>
-        <Ionicons name="list" size={32} color={corIcone} />
-      </View>
     </View>
   );
 }
@@ -177,10 +164,9 @@ export default function FolhaInferiorMotorista({
     ];
   }, [alturaFechada, alturaMenuInferior]);
   const sheetRef = useRef<BottomSheet>(null);
-  // a alça com dois ícones nas pontas (ainda sem ação)
   const renderAlca = useCallback(
-    () => <AlcaDaFolha escuro={escuro} corIcone={cores.icone} />,
-    [escuro, cores.icone],
+    () => <AlcaDaFolha escuro={escuro} />,
+    [escuro],
   );
   const insets = useSafeAreaInsets();
 
@@ -215,7 +201,12 @@ export default function FolhaInferiorMotorista({
         onAnimate={(_, para) => onSheetChange(para)}
         animatedIndex={indiceAnimado}
         // branco no modo claro (o resto dos painéis segue a cor do mapa)
-        backgroundStyle={{ backgroundColor: escuro ? cores.painel : "#ffffff" }}
+        // bordas de cima levemente arredondadas
+        backgroundStyle={{
+          backgroundColor: escuro ? cores.painel : "#ffffff",
+          borderTopLeftRadius: 28,
+          borderTopRightRadius: 28,
+        }}
         handleComponent={renderAlca}
       >
         {/* rola quando, aberta, os recursos passam da altura da folha */}
@@ -300,9 +291,6 @@ export default function FolhaInferiorMotorista({
 const styles = StyleSheet.create({
   alca: { height: ALTURA_ALCA, alignItems: "center", paddingTop: 10 },
   alcaTraco: { width: 40, height: 4, borderRadius: 2 },
-  alcaIcone: { position: "absolute", top: 8 },
-  alcaIconeEsquerda: { left: 16 },
-  alcaIconeDireita: { right: 16 },
   vazio: {
     alignItems: "center",
     marginTop: -12,
