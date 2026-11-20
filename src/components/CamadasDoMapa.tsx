@@ -1,6 +1,6 @@
 import { Text } from "@/components/common/Texto";
 import type { CamadasDoMapa as Camadas } from "@/domain/dinamica";
-import { useEstilos } from "@/theme/tema";
+import { useEstilos, useTema } from "@/theme/tema";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useState } from "react";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
@@ -38,6 +38,7 @@ export default function CamadasDoMapa(props: Props) {
 
 function Janela({ camadas, onConfirmar, onFechar }: Props) {
   const estilos = useEstilos(styles);
+  const { cores } = useTema();
   // só vale de verdade ao confirmar
   const [rascunho, setRascunho] = useState(camadas);
 
@@ -52,7 +53,7 @@ function Janela({ camadas, onConfirmar, onFechar }: Props) {
             hitSlop={12}
             onPress={onFechar}
           >
-            <Ionicons name="close" size={22} color="#111111" />
+            <Ionicons name="close" size={22} color={cores.texto} />
           </Pressable>
         </View>
 
@@ -71,7 +72,7 @@ function Janela({ camadas, onConfirmar, onFechar }: Props) {
                 setRascunho((atual) => ({ ...atual, [chave]: !atual[chave] }))
               }
             >
-              <Ionicons name={icone} size={20} color="#111111" />
+              <Ionicons name={icone} size={20} color={cores.texto} />
               <Text style={estilos.linhaTitulo}>{titulo}</Text>
               <View style={[estilos.caixa, ligado && estilos.caixaLigada]}>
                 {ligado && (

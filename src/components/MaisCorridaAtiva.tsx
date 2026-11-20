@@ -1,9 +1,11 @@
 import { extrasDaCorrida, useEstilos, useTema } from "@/theme/tema";
 // CODEX: 486 linhas criadas neste arquivo para detalhes, ajuda e cancelamento seguro da corrida ativa.
+import BotaoContatoPassageiro from "@/components/BotaoContatoPassageiro";
 import CentralAjuda from "@/components/CentralAjuda";
 import type { PassageiroDaCorrida } from "@/components/CorridaEmAndamento";
 import { enderecoCurto } from "@/domain/endereco";
 import { Text } from "@/components/common/Texto";
+import { emDistancia, minutosEstimados } from "@/domain/negocia";
 import { reputacaoPassageiro } from "@/domain/reputacaoPassageiro";
 import type { ResultadoCancelamento } from "@/hooks/useDespachoMotorista";
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -28,6 +30,13 @@ interface Props {
   destino?: string | null;
   ocupado?: boolean;
   categoria?: string | null;
+  // forma de pagamento da corrida, em selo ao lado da categoria
+  metodoPagamento?: string | null;
+  // km do itinerário inteiro; o tempo vem da velocidade média da cidade
+  distanciaTotalKm?: number | null;
+  // o mesmo botão de contato da tela da corrida: chat (ou ligação) e não lidas
+  chatNaoLidas?: number;
+  onAbrirChat?: () => void;
   // em viagem o backend não aceita mais cancelamento pelo motorista
   podeCancelar?: boolean;
   recusarNovas?: boolean;
@@ -41,6 +50,12 @@ interface Props {
   // compartilhada: desistir devolve o grupo e suspende as chamadas de grupo
   compartilhada?: boolean;
 }
+
+const ROTULO_PAGAMENTO: Record<string, string> = {
+  dinheiro: "Dinheiro",
+  cartao: "Cartão",
+  pix: "Pix",
+};
 
 const MOTIVO_AUSENCIA = "Passageiro não apareceu";
 
@@ -65,6 +80,10 @@ export default function MaisCorridaAtiva({
   destino,
   ocupado = false,
   categoria,
+  metodoPagamento,
+  distanciaTotalKm,
+  chatNaoLidas = 0,
+  onAbrirChat,
   podeCancelar = true,
   recusarNovas = false,
   onAlternarRecusarNovas,
@@ -182,9 +201,16 @@ export default function MaisCorridaAtiva({
             contentContainerStyle={styles.conteudoMais}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.etiquetaCategoria}>
-              {categoria ?? "Corrida atual"}
-            </Text>
+            <View style={styles.etiquetas}>
+              <Text style={styles.etiquetaCategoria}>
+                {categoria ?? "Corrida atual"}
+              </Text>
+              {metodoPagamento ? (
+                <Text style={styles.etiquetaCategoria}>
+                  {ROTULO_PAGAMENTO[metodoPagamento] ?? metodoPagamento}
+                </Text>
+              ) : null}
+            </View>
 
             <View style={styles.cartaoCorrida}>
               <View style={styles.linhaPassageiro}>
@@ -212,16 +238,12 @@ export default function MaisCorridaAtiva({
                   </Text>
                 </View>
 
-                {passageiro?.telefone ? (
-                  <TouchableOpacity
-                    style={styles.botaoLigar}
-                    onPress={ligar}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Ligar para ${passageiro.nome}`}
-                  >
-                    <Feather name="phone" size={21} color={cores.icone} />
-                  </TouchableOpacity>
-                ) : null}
+                <BotaoContatoPassageiro
+                  naoLidas={chatNaoLidas}
+                  onChat={onAbrirChat}
+                  onLigar={passageiro?.telefone ? ligar : undefined}
+                  estilo={styles.botaoLigar}
+                />
               </View>
 
               <View style={styles.separador} />
@@ -245,6 +267,31 @@ export default function MaisCorridaAtiva({
                   {destino ? enderecoCurto(destino) : "Destino não informado"}
                 </Text>
               </View>
+
+              {typeof distanciaTotalKm === "number" && distanciaTotalKm > 0 ? (
+                <View style={styles.resumoViagem}>
+                  <View style={styles.resumoItem}>
+                    <Ionicons
+                      name="time-outline"
+                      size={20}
+                      color={cores.icone}
+                    />
+                    <Text style={styles.resumoTexto}>
+                      {minutosEstimados(distanciaTotalKm)} min
+                    </Text>
+                  </View>
+                  <View style={styles.resumoItem}>
+                    <Ionicons
+                      name="navigate-outline"
+                      size={20}
+                      color={cores.icone}
+                    />
+                    <Text style={styles.resumoTexto}>
+                      {emDistancia(distanciaTotalKm)}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
 
               <View style={styles.acoesCartao}>
                 {podeCancelar && (
@@ -283,11 +330,11 @@ export default function MaisCorridaAtiva({
                     ? "Voltar a aceitar novas corridas"
                     : "Recusar novas corridas"}
                 </Text>
-                <Text style={styles.botaoRecusarNovasApoio}>
-                  {recusarNovas
-                    ? "Você fica offline quando esta corrida terminar"
-                    : "Fica offline quando esta corrida terminar"}
-                </Text>
+                {recusarNovas && (
+                  <Text style={styles.botaoRecusarNovasApoio}>
+                    Você fica offline quando esta corrida terminar
+                  </Text>
+                )}
               </TouchableOpacity>
             )}
           </ScrollView>
@@ -446,6 +493,12 @@ const estilosBase = StyleSheet.create({
     marginLeft: 6,
   },
   conteudoMais: { padding: 16, paddingBottom: 40 },
+  etiquetas: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 10,
+  },
   etiquetaCategoria: {
     alignSelf: "flex-start",
     color: "#64748B",
@@ -455,7 +508,6 @@ const estilosBase = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 4,
     paddingHorizontal: 9,
-    marginBottom: 10,
   },
   cartaoCorrida: {
     backgroundColor: "#FFF",
@@ -475,13 +527,13 @@ const estilosBase = StyleSheet.create({
     justifyContent: "center",
   },
   dadosPassageiro: { flex: 1 },
-  nomePassageiro: { color: "#111", fontSize: 18, fontWeight: "700" },
-  reputacao: { color: "#777", fontSize: 13, marginTop: 3 },
+  nomePassageiro: { color: "#111", fontSize: 21, fontWeight: "700" },
+  reputacao: { color: "#777", fontSize: 15, marginTop: 3 },
   botaoLigar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: "#F0F0F0",
+    width: 47,
+    height: 47,
+    borderRadius: 23.5,
+    backgroundColor: "#F3F3F3",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -490,7 +542,7 @@ const estilosBase = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
-    marginBottom: 12,
+    marginBottom: 20,
   },
   pontoEndereco: {
     width: 22,
@@ -504,10 +556,19 @@ const estilosBase = StyleSheet.create({
   enderecoTexto: {
     flex: 1,
     color: "#252525",
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: "600",
-    lineHeight: 19,
+    lineHeight: 24,
   },
+  resumoViagem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 24,
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  resumoItem: { flexDirection: "row", alignItems: "center", gap: 8 },
+  resumoTexto: { color: "#252525", fontSize: 17, fontWeight: "700" },
   acoesCartao: { flexDirection: "row", gap: 10, marginTop: 4 },
   botaoRecusarNovas: {
     minHeight: 56,
@@ -522,7 +583,7 @@ const estilosBase = StyleSheet.create({
   botaoRecusarNovasAtivo: { backgroundColor: "#FFF4D6" },
   botaoRecusarNovasTexto: {
     color: "#111",
-    fontSize: 17,
+    fontSize: 19,
     fontWeight: "600",
     textAlign: "center",
   },
@@ -543,7 +604,7 @@ const estilosBase = StyleSheet.create({
   },
   botaoSecundarioTexto: {
     color: "#222",
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "700",
     textAlign: "center",
   },

@@ -13,6 +13,19 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  extrasDaCorrida,
+  useEstilos,
+  useTema,
+  type CoresDoTema,
+} from "@/theme/tema";
+
+// no escuro o aviso amarelo vira um marrom escuro, com o texto em dourado claro
+const extrasDoAviso = (cores: CoresDoTema) => ({
+  ...extrasDaCorrida(cores),
+  "color:#3d2a00": "#F2D79A",
+  "color:#7a5a12": "#E6C46A",
+});
 
 // prazo padrão do backend (precificacao.negocia_pagamento_limite_segundos)
 const PRAZO_PAGAMENTO_PADRAO_S = 300;
@@ -27,7 +40,8 @@ const emReais = (valor: number | string | null | undefined) => {
     : "";
 };
 
-function useSegundosAte(instante: string | null) {
+// `instante`: texto ISO do servidor ou milissegundos no relógio do celular
+function useSegundosAte(instante: string | number | null) {
   const [agora, setAgora] = useState(() => Date.now());
 
   useEffect(() => {
@@ -35,42 +49,47 @@ function useSegundosAte(instante: string | null) {
     return () => clearInterval(relogio);
   }, []);
 
-  if (!instante) return null;
-  return Math.max(0, Math.round((new Date(instante).getTime() - agora) / 1000));
+  if (instante === null || instante === "") return null;
+  const alvo =
+    typeof instante === "number" ? instante : new Date(instante).getTime();
+  return Math.max(0, Math.round((alvo - agora) / 1000));
 }
 
 // Negocia com o empilhar desligado: o card amarelo de antes, no rodapé, com a
 // proposta que vence primeiro (as outras seguem na lista de Solicitações)
 export function PropostaEnviadaAviso({
   valorMotorista,
-  expiraEm,
+  vencimento,
   outras,
   distanciaDoRodape,
   onAlturaChange,
 }: {
   valorMotorista: number | null;
-  expiraEm: string | null;
+  // quando a proposta vence no relógio do celular (ms), pelo prazo do servidor
+  vencimento: number | null;
   // quantas propostas além desta esperam o passageiro
   outras: number;
   distanciaDoRodape: number;
   onAlturaChange?: (altura: number) => void;
 }) {
-  const segundos = useSegundosAte(expiraEm);
+  const { cores } = useTema();
+  const estilos = useEstilos(styles, extrasDoAviso);
+  const segundos = useSegundosAte(vencimento);
 
   return (
     <View
-      style={[styles.aviso, { bottom: distanciaDoRodape + 12 }]}
+      style={[estilos.aviso, { bottom: distanciaDoRodape + 12 }]}
       accessibilityLiveRegion="polite"
       onLayout={({ nativeEvent }) =>
         onAlturaChange?.(nativeEvent.layout.height)
       }
     >
-      <ActivityIndicator color="#111" />
-      <View style={styles.textos}>
-        <Text style={styles.tituloAviso}>
+      <ActivityIndicator color={cores.icone} />
+      <View style={estilos.textos}>
+        <Text style={estilos.tituloAviso}>
           Proposta enviada: {emReais(valorMotorista)}
         </Text>
-        <Text style={styles.apoioAviso}>
+        <Text style={estilos.apoioAviso}>
           Aguardando o passageiro escolher
           {segundos !== null ? ` · ${segundos}s` : ""}
           {outras > 0

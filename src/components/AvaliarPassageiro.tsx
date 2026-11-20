@@ -14,7 +14,7 @@ import {
 import { CorridaParaAvaliar } from "@/hooks/useAvaliacaoPendente";
 import { useSelosAvaliacao } from "@/hooks/useSelosAvaliacao";
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   Alert,
   Animated,
@@ -38,7 +38,6 @@ interface Props {
 }
 
 const ESTRELAS = [1, 2, 3, 4, 5];
-const TEMPO_MAXIMO_ABERTA_MS = 20_000;
 const ALTURA_DA_LINHA_DO_CABECALHO = 44;
 
 export default function AvaliarPassageiro({
@@ -68,34 +67,6 @@ export default function AvaliarPassageiro({
   const [escolhidos, setEscolhidos] = useState<string[]>([]);
   const [bloqueando, setBloqueando] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
-
-  // sem nenhuma interação (toque, rolagem, digitação) por 20 segundos, a avaliação
-  // se fecha sozinha, como em "Agora não"; ela segue pendente para depois.
-  // Qualquer atividade reinicia a contagem, e enviar nunca é interrompido.
-  const fecharAoExpirar = useRef(onDispensar);
-  const emEnvio = useRef(enviando);
-  useEffect(() => {
-    fecharAoExpirar.current = onDispensar;
-    emEnvio.current = enviando;
-  });
-  const timerDeInatividade = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reiniciarInatividade = useCallback(() => {
-    const armar = () => {
-      timerDeInatividade.current = setTimeout(() => {
-        if (emEnvio.current) armar();
-        else fecharAoExpirar.current();
-      }, TEMPO_MAXIMO_ABERTA_MS);
-    };
-
-    if (timerDeInatividade.current) clearTimeout(timerDeInatividade.current);
-    armar();
-  }, []);
-  useEffect(() => {
-    reiniciarInatividade();
-    return () => {
-      if (timerDeInatividade.current) clearTimeout(timerDeInatividade.current);
-    };
-  }, [corrida.id, reiniciarInatividade]);
 
   const bloquear = async () => {
     setBloqueando(true);
@@ -133,7 +104,7 @@ export default function AvaliarPassageiro({
       animationType="slide"
       onRequestClose={onDispensar}
     >
-      <View style={styles.fundo} onTouchStart={reiniciarInatividade}>
+      <View style={styles.fundo}>
         <View style={styles.painel}>
           {/* cabeçalho fixo: transparente no topo, branco conforme o conteúdo sobe */}
           <View

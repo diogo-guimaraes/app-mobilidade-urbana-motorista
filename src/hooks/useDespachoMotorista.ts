@@ -15,6 +15,8 @@ const INTERVALO_BUSCA_SEM_SOCKET_MS = 5000;
 // socket só chega se o servidor transmitir de verdade)
 const INTERVALO_BUSCA_COM_SOCKET_MS = 5000;
 const INTERVALO_POSICAO_MS = 8000;
+// quanto tempo o card fica na pilha dizendo que o passageiro recusou a oferta
+const RECUSA_VISIVEL_MS = 4000;
 
 const esperandoPassageiro = (item: OfertaCorrida) =>
   item.minha_proposta?.status === "pendente";
@@ -116,6 +118,11 @@ export interface PropostaEnviada {
   status: string;
   expira_em: string | null;
   validade_segundos?: number;
+  // quanto faltava quando a resposta chegou (relógio do servidor)
+  restante_segundos?: number | null;
+  // quando a proposta vence no relógio do celular: o instante em que chegou +
+  // o que faltava. É o mesmo jeito do passageiro contar o prazo.
+  vence_em_local?: number | null;
 }
 
 // a corrida que acabou de ser cancelada, para o aviso dizer quem cancelou
@@ -143,6 +150,8 @@ export interface CorridaEmCurso {
   } | null;
   produto?: { id: number; nome: string } | null;
   metodo_pagamento?: string | null;
+  // km do itinerário inteiro (embarque, paradas e destino)
+  distancia_total?: number | string | null;
   tempo_aceite?: string | null;
   // Negocia no Pix/cartão: até quando o motorista escolhido espera o pagamento
   pagamento_expira_em?: string | null;
@@ -225,6 +234,11 @@ export function useDespachoMotorista(pausado = false) {
     longitude: number;
   } | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // propostas que o passageiro acabou de recusar: o card segue na pilha, com a
+  // mensagem no lugar da contagem, e depois sai
+  const [recusadasPeloPassageiro, setRecusadasPeloPassageiro] = useState<
+    OfertaCorrida[]
+  >([]);
   // fim de corrida: o valor que o motorista ganhou, para o "cha-ching" na tela
   const [ganhoRecebido, setGanhoRecebido] = useState<{
     corridaId: number;
@@ -233,6 +247,47 @@ export function useDespachoMotorista(pausado = false) {
   const [socketAtivo, setSocketAtivo] = useState(false);
   const [gatilho, setGatilho] = useState(0);
   const [appAtivo, setAppAtivo] = useState(AppState.currentState === "active");
+
+  // prazo local de cada proposta: enquanto o servidor segue mandando o mesmo
+  // expira_em, o vencimento não muda (a contagem não pula a cada consulta)
+  const prazosDasPropostas = useRef<
+    Map<number, { expiraEm: string | null; venceEm: number }>
+  >(new Map());
+  const comPrazoLocal = (item: OfertaCorrida): OfertaCorrida => {
+    const proposta = item.minha_proposta;
+
+    if (!proposta) {
+      prazosDasPropostas.current.delete(item.corrida_id);
+
+      return item;
+    }
+
+    const anterior = prazosDasPropostas.current.get(item.corrida_id);
+    const venceEm =
+      anterior && anterior.expiraEm === proposta.expira_em
+        ? anterior.venceEm
+        : proposta.restante_segundos != null
+          ? Date.now() + proposta.restante_segundos * 1000
+          : proposta.expira_em
+            ? new Date(proposta.expira_em).getTime()
+            : null;
+
+    if (venceEm !== null) {
+      prazosDasPropostas.current.set(item.corrida_id, {
+        expiraEm: proposta.expira_em,
+        venceEm,
+      });
+    }
+
+    return {
+      ...item,
+      minha_proposta: { ...proposta, vence_em_local: venceEm },
+    };
+  };
+
+  // a última vez que cada proposta foi vista esperando o passageiro: se ele
+  // recusar e a corrida sumir da lista, é daqui que sai o card da recusa
+  const ultimasPropostasVistas = useRef<Map<number, OfertaCorrida>>(new Map());
 
   const recusadas = useRef<Map<number, number>>(new Map());
   const dispensadas = useRef<Map<number, number>>(new Map());
@@ -547,10 +602,12 @@ export function useDespachoMotorista(pausado = false) {
 
         if (cancelado) return;
 
-        const atuais = (data?.corridas ?? []).map((item) => ({
-          ...item,
-          recusada_localmente: aindaFora(recusadas.current, item.corrida_id),
-        }));
+        const atuais = (data?.corridas ?? []).map((item) =>
+          comPrazoLocal({
+            ...item,
+            recusada_localmente: aindaFora(recusadas.current, item.corrida_id),
+          }),
+        );
         // proposta que venceu ou foi recusada conta como chamada ignorada: se o
         // passageiro continua esperando, volta a tocar depois de 7 s
         esperandoAntes.current.forEach((_, corridaId) => {
@@ -600,6 +657,41 @@ export function useDespachoMotorista(pausado = false) {
           if (status !== undefined && status !== "recusada") return;
           const motivo = status === "recusada" ? "recusada" : "outro";
 
+          // recusa: o aviso vai no próprio card da pilha, no lugar da contagem
+          if (motivo === "recusada") {
+            const base =
+              atuais.find((item) => item.corrida_id === corridaId) ??
+              ultimasPropostasVistas.current.get(corridaId);
+
+            if (base) {
+              const recusada: OfertaCorrida = {
+                ...base,
+                minha_proposta: {
+                  ...(base.minha_proposta as PropostaEnviada),
+                  status: "recusada",
+                },
+              };
+
+              setRecusadasPeloPassageiro((atuaisRecusadas) => [
+                ...atuaisRecusadas.filter(
+                  (item) => item.corrida_id !== corridaId,
+                ),
+                recusada,
+              ]);
+              setTimeout(
+                () =>
+                  setRecusadasPeloPassageiro((atuaisRecusadas) =>
+                    atuaisRecusadas.filter(
+                      (item) => item.corrida_id !== corridaId,
+                    ),
+                  ),
+                RECUSA_VISIVEL_MS,
+              );
+
+              return;
+            }
+          }
+
           mostrarToast({
             tipo: "info",
             titulo:
@@ -610,6 +702,11 @@ export function useDespachoMotorista(pausado = false) {
           });
         });
         esperandoAntes.current = esperando;
+        ultimasPropostasVistas.current = new Map(
+          atuais
+            .filter(esperandoPassageiro)
+            .map((item) => [item.corrida_id, item]),
+        );
       } catch (falha) {
         if (!cancelado) {
           setOferta(null);
@@ -905,11 +1002,23 @@ export function useDespachoMotorista(pausado = false) {
         propostasMandadas.current.add(corridaId);
         const atualizadas = ofertas.map((item) =>
           item.corrida_id === corridaId
-            ? { ...item, minha_proposta: data }
+            ? comPrazoLocal({ ...item, minha_proposta: data })
             : item,
         );
         setOfertas(atualizadas);
         setOferta(chamadaDaVez(atualizadas, dispensadas.current));
+
+        // a proposta já conta como "esperando o passageiro" desde o envio: se
+        // ele recusar antes da próxima consulta (a 2ª proposta da mesma pessoa,
+        // por exemplo), o card mostra a recusa e a chamada não volta a tocar
+        // na hora — antes isso só valia se a consulta tivesse visto a proposta
+        const enviada = atualizadas.find(
+          (item) => item.corrida_id === corridaId,
+        );
+        if (enviada) {
+          esperandoAntes.current.set(corridaId, data?.valor_motorista ?? null);
+          ultimasPropostasVistas.current.set(corridaId, enviada);
+        }
       } catch (falha) {
         mostrarToast({
           tipo: "warning",
@@ -930,30 +1039,59 @@ export function useDespachoMotorista(pausado = false) {
     [ofertas, mostrarToast],
   );
 
+  // Quando a proposta vence (pelo prazo local, o mesmo que a contagem do card),
+  // ela some da pilha na hora; a consulta ao servidor só confirma depois. Sem
+  // isso o card ficava em 0 s até a próxima consulta chegar.
+  const venceEmLocal = (item: OfertaCorrida) =>
+    item.minha_proposta?.vence_em_local ??
+    (item.minha_proposta?.expira_em
+      ? new Date(item.minha_proposta.expira_em).getTime()
+      : null);
+  const [agoraDasPropostas, setAgoraDasPropostas] = useState(() => Date.now());
+
   // propostas do motorista esperando o passageiro escolher, da que vence
   // primeiro para a última (a pilha na tela)
   const propostasPendentes = useMemo(
     () =>
       ofertas
-        .filter(esperandoPassageiro)
-        .sort(
-          (a, b) =>
-            new Date(a.minha_proposta?.expira_em ?? 0).getTime() -
-            new Date(b.minha_proposta?.expira_em ?? 0).getTime(),
-        ),
-    [ofertas],
+        .filter(
+          (item) =>
+            esperandoPassageiro(item) &&
+            (venceEmLocal(item) ?? Infinity) > agoraDasPropostas,
+        )
+        .sort((a, b) => (venceEmLocal(a) ?? 0) - (venceEmLocal(b) ?? 0)),
+    [ofertas, agoraDasPropostas],
   );
   const propostaEnviada = propostasPendentes[0] ?? null;
 
-  // com o socket a lista só volta a cada 30 s: quando a primeira proposta
-  // vence, a consulta sai na hora e a pilha diminui
-  const proximoVencimento = propostaEnviada?.minha_proposta?.expira_em ?? null;
+  // o que a pilha mostra: as que esperam o passageiro e as recém-recusadas
+  const propostasNaPilha = useMemo(
+    () => [
+      ...propostasPendentes,
+      ...recusadasPeloPassageiro.filter(
+        (recusada) =>
+          !propostasPendentes.some(
+            (pendente) => pendente.corrida_id === recusada.corrida_id,
+          ),
+      ),
+    ],
+    [propostasPendentes, recusadasPeloPassageiro],
+  );
+
+  // no instante em que a primeira proposta vence: tira o card da tela e manda
+  // buscar a lista de novo (com o socket ela só voltaria a cada 30 s)
+  const proximoVencimento = propostaEnviada
+    ? venceEmLocal(propostaEnviada)
+    : null;
   useEffect(() => {
     if (proximoVencimento === null) return;
 
     const espera = setTimeout(
-      () => setGatilho((atual) => atual + 1),
-      Math.max(0, new Date(proximoVencimento).getTime() - Date.now()) + 1000,
+      () => {
+        setAgoraDasPropostas(Date.now());
+        setGatilho((atual) => atual + 1);
+      },
+      Math.max(0, proximoVencimento - Date.now()) + 30,
     );
 
     return () => clearTimeout(espera);
@@ -1283,6 +1421,7 @@ export function useDespachoMotorista(pausado = false) {
     propor,
     propostaEnviada,
     propostasPendentes,
+    propostasNaPilha,
     recarregarOfertas,
     avancar,
     cancelarCorrida,

@@ -126,6 +126,7 @@ export default function Home() {
     dispensarChamada,
     propor,
     propostasPendentes,
+    propostasNaPilha,
     recarregarOfertas,
     avancar,
     cancelarCorrida,
@@ -358,6 +359,8 @@ export default function Home() {
     return () => clearInterval(intervalo);
   }, [disponivelExibido, recarregarCadastro]);
   const bottomSheetAnimatedIndex = useSharedValue(0);
+  // onde está o topo da folha agora: os botões do mapa acompanham
+  const posicaoDaFolha = useSharedValue(Dimensions.get("window").height);
   // arrastando a folha para cima, menu e ganho somem antes de o card "Recursos" descer
   const comFolha = ofertaExibida === null && corridaExibida === null;
   const topoDoMapa = useAnimatedStyle(() => ({
@@ -477,6 +480,7 @@ export default function Home() {
           }
           bottomSheetIndex={bottomSheetIndex}
           indiceFolhaAnimado={bottomSheetAnimatedIndex}
+          posicaoFolhaAnimada={posicaoDaFolha}
           alturaMinimaRodape={
             corridaExibida === null
               ? alturaMenuInferior +
@@ -563,6 +567,11 @@ export default function Home() {
           }
           metodoPagamento={
             corridaExibida.corrida_financeiro?.metodo_pagamento ?? null
+          }
+          distanciaTotalKm={
+            corridaExibida.distancia_total != null
+              ? Number(corridaExibida.distancia_total)
+              : null
           }
           minutos={chegadaExibida?.minutos ?? null}
           distanciaKm={chegadaExibida?.distancia_km ?? null}
@@ -713,9 +722,9 @@ export default function Home() {
       {!simuladorCorrida.ativa &&
         empilhar &&
         corridaExibida === null &&
-        propostasPendentes.length > 0 && (
+        propostasNaPilha.length > 0 && (
           <PilhaPropostasNegocia
-            propostas={propostasPendentes}
+            propostas={propostasNaPilha}
             chamadaNaTela={ofertaExibida !== null}
           />
         )}
@@ -725,7 +734,14 @@ export default function Home() {
           valorMotorista={
             propostasPendentes[0].minha_proposta?.valor_motorista ?? null
           }
-          expiraEm={propostasPendentes[0].minha_proposta?.expira_em ?? null}
+          vencimento={
+            propostasPendentes[0].minha_proposta?.vence_em_local ??
+            (propostasPendentes[0].minha_proposta?.expira_em
+              ? new Date(
+                  propostasPendentes[0].minha_proposta.expira_em,
+                ).getTime()
+              : null)
+          }
           outras={propostasPendentes.length - 1}
           distanciaDoRodape={alturaMenuInferior}
           onAlturaChange={setAlturaDoAviso}
@@ -898,10 +914,17 @@ export default function Home() {
             <FolhaInferiorMotorista
               onSheetChange={onChangeBottomSheetMotorista}
               indiceAnimado={bottomSheetAnimatedIndex}
+              posicaoAnimada={posicaoDaFolha}
               alturaMenuInferior={alturaMenuInferior}
               aviso={avisoBloqueio}
               acoes={acoesNecessarias}
               onAlturaAcoes={setAlturaAcoes}
+              // card esperando o passageiro na tela: a folha fica recolhida e travada
+              travada={
+                !simuladorCorrida.ativa &&
+                empilhar &&
+                propostasNaPilha.length > 0
+              }
             />
 
             <SolicitarCorrida

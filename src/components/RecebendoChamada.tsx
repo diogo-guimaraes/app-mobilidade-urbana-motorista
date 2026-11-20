@@ -2,7 +2,7 @@ import {
   textoDaNota,
   textoDeCorridasDoPassageiro,
 } from "@/domain/reputacaoPassageiro";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { AudioPlayer, createAudioPlayer } from "expo-audio";
 import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Text } from "@/components/common/Texto";
@@ -263,10 +263,6 @@ export default function RecebendoChamadas({
     typeof distanciaAteOrigem === "number"
       ? `${minutosEstimados(distanciaAteOrigem)} min (${emDistancia(distanciaAteOrigem)})`
       : "Embarque";
-  const viagem =
-    typeof distanciaDaCorrida === "number"
-      ? `${minutosEstimados(distanciaDaCorrida)} min (${emDistancia(distanciaDaCorrida)})`
-      : "Destino";
   const enderecoPartida = origem
     ? enderecoCurto(origem)
     : "Endereço de partida";
@@ -356,6 +352,24 @@ export default function RecebendoChamadas({
           <Text style={styles.reputacaoTexto}>{reputacao}</Text>
         </View>
 
+        {typeof distanciaDaCorrida === "number" ? (
+          <View style={styles.resumoCorrida}>
+            <View style={styles.resumoItem}>
+              <Ionicons name="time-outline" size={20} color="#E8E8E8" />
+              <Text style={styles.resumoTexto}>
+                {minutosEstimados(distanciaDaCorrida)} min
+              </Text>
+            </View>
+            <View style={styles.resumoItem}>
+              <Ionicons name="navigate-outline" size={20} color="#E8E8E8" />
+              <Text style={styles.resumoTexto}>
+                {emDistancia(distanciaDaCorrida)}
+              </Text>
+            </View>
+            <Text style={styles.resumoApoio}>da corrida</Text>
+          </View>
+        ) : null}
+
         <View style={styles.separador} />
 
         <View style={styles.ponto}>
@@ -370,18 +384,29 @@ export default function RecebendoChamadas({
           </View>
         </View>
 
+        {paradas > 0 && !compartilhada ? (
+          <View style={styles.ponto}>
+            <View style={[styles.icone, styles.iconeParada]}>
+              <MaterialIcons name="pin-drop" size={14} color="#111" />
+            </View>
+            <View style={styles.pontoTextos}>
+              <Text style={styles.pontoTempo}>
+                {paradas} {paradas === 1 ? "Parada" : "Paradas"}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.ponto}>
           <View style={[styles.icone, styles.iconeDestino]}>
             <Ionicons name="arrow-down" size={13} color="#FFF" />
           </View>
           <View style={styles.pontoTextos}>
             <Text style={styles.pontoTempo}>
-              {viagem}
+              Destino
               {compartilhada
                 ? ` · ${compartilhada.passageiros} passageiros`
-                : paradas > 0
-                  ? ` · ${paradas} ${paradas === 1 ? "parada" : "paradas"}`
-                  : ""}
+                : ""}
             </Text>
             <Text style={styles.pontoEndereco} numberOfLines={2}>
               {enderecoDestino}
@@ -612,6 +637,15 @@ const styles = StyleSheet.create({
   corpo: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 18 },
   reputacao: { flexDirection: "row", alignItems: "center", gap: 8 },
   reputacaoTexto: { color: "#FFF", fontSize: 16 },
+  resumoCorrida: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 18,
+    marginTop: 10,
+  },
+  resumoItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  resumoTexto: { color: "#FFF", fontSize: 17, fontWeight: "700" },
+  resumoApoio: { color: "#B5B5B5", fontSize: 14 },
   separador: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: "#4A4A4A",
@@ -628,6 +662,7 @@ const styles = StyleSheet.create({
   },
   iconeEmbarque: { backgroundColor: "#17C08A" },
   iconeDestino: { backgroundColor: "#F2662F" },
+  iconeParada: { backgroundColor: "#FBC02D" },
   pontoTextos: { flex: 1 },
   pontoTempo: { color: "#FFF", fontSize: 17, fontWeight: "700" },
   pontoEndereco: { color: "#DADADA", fontSize: 16, lineHeight: 21 },

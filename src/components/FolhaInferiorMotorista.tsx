@@ -4,7 +4,10 @@ import BannersPublicidade from "@/components/BannersPublicidade";
 import { useBannersPublicidade } from "@/hooks/useBannersPublicidade";
 import TituloBloqueio from "@/components/TituloBloqueio";
 import { useTema } from "@/theme/tema";
-import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import BottomSheet, {
+  BottomSheetScrollView,
+  type BottomSheetBackgroundProps,
+} from "@gorhom/bottom-sheet";
 import React, {
   useCallback,
   useEffect,
@@ -21,7 +24,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import type { SharedValue } from "react-native-reanimated";
+import Animated, { type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // alça da folha, acima do conteúdo
@@ -35,12 +38,18 @@ interface DriverSearchProps {
   // ✨ NOVO: Callback para notificar o componente pai (Home) sobre a mudança de estado
   onSheetChange: (index: number) => void;
   indiceAnimado: SharedValue<number>;
+  // posição do topo da folha (px, a partir do topo da tela), a cada quadro:
+  // os botões do mapa sobem e descem junto com ela
+  posicaoAnimada?: SharedValue<number>;
   alturaMenuInferior: number;
   // com ação na lista o título alterna os avisos e `aviso` (toques no Conectar) pisca em vermelho
   aviso: number;
   acoes: ItemAcao[];
   // quanto a folha fechada sobe acima do menu: a alça ou as ações
   onAlturaAcoes: (altura: number) => void;
+  // com card esperando o passageiro na tela, a folha fica recolhida e travada;
+  // quando o último some, ela destrava e abre
+  travada?: boolean;
 }
 
 // Degradê de cima para baixo feito com faixas de opacidade decrescente (o app
@@ -109,6 +118,39 @@ function DegradeDeCima({
   );
 }
 
+// O fundo da folha: a cor do tema, as bordas de cima arredondadas e, quando não
+// há nada para mostrar, o degradê começando no topo (na alça).
+function FundoDaFolha({
+  style,
+  fundo,
+  escuro,
+  comDegrade,
+}: {
+  style: BottomSheetBackgroundProps["style"];
+  fundo: string;
+  escuro: boolean;
+  comDegrade: boolean;
+}) {
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        style,
+        {
+          backgroundColor: fundo,
+          borderTopLeftRadius: 28,
+          borderTopRightRadius: 28,
+          overflow: "hidden",
+        },
+      ]}
+    >
+      {comDegrade && (
+        <DegradeDeCima fundo={fundo} escuro={escuro} altura={320} />
+      )}
+    </Animated.View>
+  );
+}
+
 // a alça: só o traço no meio
 function AlcaDaFolha({ escuro }: { escuro: boolean }) {
   return (
@@ -126,10 +168,12 @@ function AlcaDaFolha({ escuro }: { escuro: boolean }) {
 export default function FolhaInferiorMotorista({
   onSheetChange,
   indiceAnimado,
+  posicaoAnimada,
   alturaMenuInferior,
   aviso,
   acoes,
   onAlturaAcoes,
+  travada = false,
 }: DriverSearchProps) {
   const { escuro, cores } = useTema();
   const { banners, carregado, carregando, recarregar } =
@@ -164,6 +208,19 @@ export default function FolhaInferiorMotorista({
     ];
   }, [alturaFechada, alturaMenuInferior]);
   const sheetRef = useRef<BottomSheet>(null);
+  // sem ação pendente e sem banner: a folha mostra "Nada para mostrar"
+  const nadaParaMostrar = !temAcoes && carregado && banners.length === 0;
+  const renderFundo = useCallback(
+    ({ style }: BottomSheetBackgroundProps) => (
+      <FundoDaFolha
+        style={style}
+        fundo={escuro ? cores.painel : "#ffffff"}
+        escuro={escuro}
+        comDegrade={nadaParaMostrar}
+      />
+    ),
+    [escuro, cores.painel, nadaParaMostrar],
+  );
   const renderAlca = useCallback(
     () => <AlcaDaFolha escuro={escuro} />,
     [escuro],
@@ -172,15 +229,32 @@ export default function FolhaInferiorMotorista({
 
   // sem ação pendente e sem banner (a mensagem "Nada para mostrar"), a folha
   // já começa aberta na metade; só na primeira vez, para não brigar com o arraste
-  const nadaParaMostrar = !temAcoes && carregado && banners.length === 0;
   const abriuSemNada = useRef(false);
 
   useEffect(() => {
-    if (!nadaParaMostrar || abriuSemNada.current) return;
+    // travada (card esperando o passageiro): não abre; ao destravar ela abre sozinha
+    if (!nadaParaMostrar || abriuSemNada.current || travada) return;
 
     abriuSemNada.current = true;
     sheetRef.current?.snapToIndex(1);
-  }, [nadaParaMostrar]);
+  }, [nadaParaMostrar, travada]);
+
+  // travada: recolhe e prende a folha; ao destravar, ela abre
+  const estavaTravada = useRef(false);
+
+  useEffect(() => {
+    if (travada) {
+      estavaTravada.current = true;
+      sheetRef.current?.snapToIndex(0);
+
+      return;
+    }
+
+    if (estavaTravada.current) {
+      estavaTravada.current = false;
+      sheetRef.current?.snapToIndex(1);
+    }
+  }, [travada]);
 
   // com a folha aberta o aviso ficaria fora da vista: ela volta a mostrar as ações
   useEffect(() => {
@@ -195,18 +269,17 @@ export default function FolhaInferiorMotorista({
         snapPoints={snapPoints}
         enableDynamicSizing={false}
         enablePanDownToClose={false}
+        enableContentPanningGesture={!travada}
+        enableHandlePanningGesture={!travada}
         topInset={insets.top + FOLGA_NO_TOPO}
         onChange={onSheetChange}
         // avisa já no início, para o menu do topo sair antes de a folha chegar
         onAnimate={(_, para) => onSheetChange(para)}
         animatedIndex={indiceAnimado}
+        animatedPosition={posicaoAnimada}
         // branco no modo claro (o resto dos painéis segue a cor do mapa)
-        // bordas de cima levemente arredondadas
-        backgroundStyle={{
-          backgroundColor: escuro ? cores.painel : "#ffffff",
-          borderTopLeftRadius: 28,
-          borderTopRightRadius: 28,
-        }}
+        // o fundo leva o degradê desde o topo da folha, atrás da alça
+        backgroundComponent={renderFundo}
         handleComponent={renderAlca}
       >
         {/* rola quando, aberta, os recursos passam da altura da folha */}
@@ -226,19 +299,8 @@ export default function FolhaInferiorMotorista({
           {/* os banners cadastrados na Central de Publicidade da gestão; com
               ação pendente a folha mostra só as ações */}
           {!temAcoes && (
-            <View
-              style={[
-                styles.recursos,
-                { backgroundColor: escuro ? cores.painel : "#ffffff" },
-              ]}
-            >
-              {nadaParaMostrar && (
-                <DegradeDeCima
-                  fundo={escuro ? cores.painel : "#ffffff"}
-                  escuro={escuro}
-                  altura={320}
-                />
-              )}
+            // sem fundo próprio: o fundo da folha (com o degradê) aparece por trás
+            <View style={styles.recursos}>
               <BannersPublicidade banners={banners} />
               {/* nada para mostrar: sem ação pendente e sem banner da cidade */}
               {nadaParaMostrar && (

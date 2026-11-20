@@ -56,6 +56,8 @@ interface MapProps {
   onUserLocationFound?: (region: Region) => void;
   bottomSheetIndex?: number; // 👈 nova prop
   indiceFolhaAnimado?: SharedValue<number>;
+  // topo da folha da home (px a partir do topo): os botões ficam sempre acima dela
+  posicaoFolhaAnimada?: SharedValue<number>;
   isGanhoModalVisible?: boolean;
   rota?: Coordenada[];
   alvo?: Coordenada | null;
@@ -125,6 +127,7 @@ export default function Map({
   onUserLocationFound,
   bottomSheetIndex, // 👈 recebendo o valor
   indiceFolhaAnimado,
+  posicaoFolhaAnimada,
   isGanhoModalVisible,
   rota = [],
   alvo = null,
@@ -180,6 +183,28 @@ export default function Map({
 
   const estiloPosicaoCentralizar = useAnimatedStyle(() => {
     const indice = indiceFolhaAnimado?.value ?? bottomSheetIndex ?? 0;
+
+    // na home, os botões seguem o topo real da folha (abrindo, fechando ou
+    // sendo arrastada): ficam sempre 12 acima dela, nunca por baixo
+    if (posicaoFolhaAnimada && alturaFolha === 0) {
+      const alturaDoMapa =
+        dimensoesMapa.height > 0 ? dimensoesMapa.height : alturaTela;
+      const ocupada = Math.max(
+        alturaDoMapa - posicaoFolhaAnimada.value,
+        alturaMinimaRodape,
+      );
+
+      return {
+        bottom: Math.min(ocupada + 12, alturaDoMapa - 64),
+        opacity: interpolate(
+          indice,
+          [0, 1.7, 2],
+          [1, 1, 0],
+          Extrapolation.CLAMP,
+        ),
+      };
+    }
+
     const folgaDaFolha = interpolate(
       indice,
       [0, 1, 2],
@@ -216,6 +241,8 @@ export default function Map({
     alturaTela,
     bottomSheetIndex,
     indiceFolhaAnimado,
+    posicaoFolhaAnimada,
+    dimensoesMapa.height,
   ]);
 
   // 🔹 guarda a região original do usuário para aplicar offsets conforme o BottomSheet
@@ -710,7 +737,7 @@ export default function Map({
               estiloOpacidadeBotoes,
             ]}
           >
-            {botaoAcima}
+            {/* recentralizar fica sempre por cima dos outros botões */}
             {mapaMovido && !travado && (
               <TouchableOpacity
                 accessibilityLabel="Centralizar na minha localização"
@@ -722,10 +749,19 @@ export default function Map({
                 <MaterialIcons
                   name={userLocation ? "my-location" : "location-searching"}
                   size={24}
-                  color={buscandoPosicao ? "#ccc" : "#007AFF"}
+                  color={
+                    buscandoPosicao
+                      ? tema.escuro
+                        ? "#6B7280"
+                        : "#ccc"
+                      : tema.escuro
+                        ? "#4DA3FF"
+                        : "#007AFF"
+                  }
                 />
               </TouchableOpacity>
             )}
+            {botaoAcima}
             {!travado && (
               <TouchableOpacity
                 accessibilityLabel="Camadas do mapa"

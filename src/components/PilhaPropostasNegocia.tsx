@@ -3,9 +3,11 @@ import { Text } from "@/components/common/Texto";
 import { enderecoCurto } from "@/domain/endereco";
 import { emDistancia } from "@/domain/negocia";
 import type { OfertaCorrida } from "@/hooks/useDespachoMotorista";
+import { extrasDaCorrida, useEstilos, type CoresDoTema } from "@/theme/tema";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Easing,
   ScrollView,
@@ -19,6 +21,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const VALIDADE_PADRAO_MS = 20_000;
 const DURACAO_ENTRADA_MS = 280;
 const DURACAO_SAIDA_MS = 240;
+// o loading entre a contagem e a mensagem de recusa
+const TROCA_DO_TEXTO_MS = 900;
 // a pilha começa logo abaixo do menu e do saldo do topo
 const DISTANCIA_DO_TOPO = 68;
 
@@ -61,8 +65,15 @@ function CartaoAguardando({
   compacto: boolean;
   onSaiu: (corridaId: number) => void;
 }) {
+  const estilos = useEstiloDaPilha();
   const { oferta, saindo } = item;
-  const expiraEm = oferta.minha_proposta?.expira_em ?? null;
+  // o prazo vem de quanto falta (servidor), igual ao do passageiro; sem isso,
+  // do horário de vencimento
+  const expiraEm =
+    oferta.minha_proposta?.vence_em_local ??
+    (oferta.minha_proposta?.expira_em
+      ? new Date(oferta.minha_proposta.expira_em).getTime()
+      : null);
   const validadeMs =
     (oferta.minha_proposta?.validade_segundos ?? 0) * 1000 ||
     VALIDADE_PADRAO_MS;
@@ -71,6 +82,25 @@ function CartaoAguardando({
   const [progresso] = useState(() => new Animated.Value(0));
   const [largura, setLargura] = useState(0);
   const [agora, setAgora] = useState(() => Date.now());
+  // o passageiro recusou: a contagem dá lugar a um loading rápido e, depois, à
+  // mensagem
+  const recusada = oferta.minha_proposta?.status === "recusada";
+  const [fase, setFase] = useState<"espera" | "carregando" | "mensagem">(
+    recusada ? "mensagem" : "espera",
+  );
+
+  useEffect(() => {
+    if (!recusada) {
+      setFase("espera");
+
+      return;
+    }
+
+    setFase("carregando");
+    const mostrar = setTimeout(() => setFase("mensagem"), TROCA_DO_TEXTO_MS);
+
+    return () => clearTimeout(mostrar);
+  }, [recusada]);
 
   useEffect(() => {
     const relogio = setInterval(() => setAgora(Date.now()), 1000);
@@ -104,7 +134,7 @@ function CartaoAguardando({
   useEffect(() => {
     if (saindo || largura === 0 || expiraEm === null) return;
 
-    const restante = Math.max(0, new Date(expiraEm).getTime() - Date.now());
+    const restante = Math.max(0, expiraEm - Date.now());
     progresso.setValue(Math.min(1, Math.max(0, 1 - restante / validadeMs)));
     const contagem = Animated.timing(progresso, {
       toValue: 1,
@@ -120,7 +150,7 @@ function CartaoAguardando({
   const segundos =
     expiraEm === null
       ? null
-      : Math.max(0, Math.round((new Date(expiraEm).getTime() - agora) / 1000));
+      : Math.max(0, Math.round((expiraEm - agora) / 1000));
   const valor = emReais(
     oferta.minha_proposta?.valor_motorista ?? oferta.valor_motorista,
   );
@@ -136,69 +166,81 @@ function CartaoAguardando({
   return (
     <Animated.View
       style={[
-        styles.cartao,
+        estilos.cartao,
         { opacity: opacidade, transform: [{ translateY: deslocamento }] },
       ]}
       accessible
       accessibilityLabel={`Proposta de ${valor} esperando o passageiro${segundos !== null ? `, ${segundos} segundos` : ""}. Embarque em ${enderecoCurto(oferta.origem)}`}
     >
-      <View style={styles.topo}>
-        <Text style={styles.categoria} numberOfLines={1}>
+      <View style={estilos.topo}>
+        <Text style={estilos.categoria} numberOfLines={1}>
           {oferta.categoria ?? "Negocia"}
         </Text>
-        <Text style={styles.valor}>{valor}</Text>
+        <Text style={estilos.valor}>{valor}</Text>
       </View>
 
       {!compacto && (
-        <View style={styles.passageiroLinha}>
-          <View style={styles.foto}>
+        <View style={estilos.passageiroLinha}>
+          <View style={estilos.foto}>
             <Ionicons name="person" size={20} color="#9AA1AB" />
           </View>
-          <View style={styles.dados}>
-            <Text style={styles.reputacao} numberOfLines={1}>
+          <View style={estilos.dados}>
+            <Text style={estilos.reputacao} numberOfLines={1}>
               {reputacao}
               {corridas}
             </Text>
-            <Text style={styles.endereco} numberOfLines={1}>
+            <Text style={estilos.endereco} numberOfLines={1}>
               {enderecoCurto(oferta.origem)}
             </Text>
           </View>
-          <View style={styles.distancias}>
-            <Text style={styles.distancia}>
+          <View style={estilos.distancias}>
+            <Text style={estilos.distancia}>
               {emDistancia(oferta.distancia_ate_origem_km)}
             </Text>
-            <Text style={styles.viagem}>
+            <Text style={estilos.viagem}>
               {emDistancia(oferta.distancia_corrida_km)} de viagem
             </Text>
           </View>
         </View>
       )}
 
-      <View
-        style={styles.aguardando}
-        onLayout={({ nativeEvent }) => setLargura(nativeEvent.layout.width)}
-      >
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.preenchimento,
-            {
-              transform: [
-                {
-                  translateX: progresso.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, -largura],
-                  }),
-                },
-              ],
-            },
-          ]}
-        />
-        <Text style={styles.aguardandoTexto}>
-          Aguardando o passageiro
-          {segundos !== null ? ` · ${segundos}s` : ""}
-        </Text>
-      </View>
+      {fase !== "espera" ? (
+        <View style={estilos.recusou}>
+          {fase === "carregando" ? (
+            <ActivityIndicator color="#B42318" />
+          ) : (
+            <Text style={estilos.recusouTexto}>
+              O passageiro recusou a sua oferta
+            </Text>
+          )}
+        </View>
+      ) : (
+        <View
+          style={estilos.aguardando}
+          onLayout={({ nativeEvent }) => setLargura(nativeEvent.layout.width)}
+        >
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              estilos.preenchimento,
+              {
+                transform: [
+                  {
+                    translateX: progresso.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, -largura],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+          <Text style={estilos.aguardandoTexto}>
+            Aguardando o passageiro
+            {segundos !== null ? ` · ${segundos}s` : ""}
+          </Text>
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -213,6 +255,7 @@ export default function PilhaPropostasNegocia({
   // com a chamada da vez embaixo, a pilha para antes dela
   chamadaNaTela: boolean;
 }) {
+  const estilos = useEstiloDaPilha();
   const insets = useSafeAreaInsets();
   const { height: alturaTela } = useWindowDimensions();
   const [anteriores, setAnteriores] = useState(propostas);
@@ -238,12 +281,12 @@ export default function PilhaPropostasNegocia({
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.container, { top: topo }]}
+      style={[estilos.container, { top: topo }]}
       accessibilityLiveRegion="polite"
     >
       <ScrollView
         style={{ maxHeight: Math.max(160, alturaMaxima) }}
-        contentContainerStyle={styles.lista}
+        contentContainerStyle={estilos.lista}
         showsVerticalScrollIndicator={false}
       >
         {itens.map((item) => (
@@ -257,6 +300,26 @@ export default function PilhaPropostasNegocia({
       </ScrollView>
     </View>
   );
+}
+
+// no escuro o cartão vira o painel do tema; a barra amarela "Aguardando o
+// passageiro" (com texto escuro) continua igual nos dois temas
+const extrasDaPilha = (cores: CoresDoTema) => ({
+  ...extrasDaCorrida(cores),
+  "#eceef1": cores.item,
+  // nota e endereço do passageiro: cinza escuro no claro, legível no escuro
+  "color:#3c4043": cores.texto,
+});
+
+function useEstiloDaPilha() {
+  const tema = useEstilos(styles, extrasDaPilha);
+
+  return {
+    ...tema,
+    aguardando: styles.aguardando,
+    preenchimento: styles.preenchimento,
+    aguardandoTexto: styles.aguardandoTexto,
+  };
 }
 
 const styles = StyleSheet.create({
@@ -326,4 +389,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFD000",
   },
   aguardandoTexto: { fontSize: 15, fontWeight: "800", color: "#111" },
+  // o passageiro recusou a oferta: faixa avermelhada no lugar da amarela
+  recusou: {
+    minHeight: 42,
+    borderRadius: 8,
+    backgroundColor: "#FDECEA",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  recusouTexto: { fontSize: 15, fontWeight: "800", color: "#B42318" },
 });

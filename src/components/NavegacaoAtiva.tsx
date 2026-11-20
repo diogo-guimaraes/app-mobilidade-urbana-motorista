@@ -87,6 +87,8 @@ interface Props {
   origem?: string | null;
   destino?: string | null;
   metodoPagamento?: string | null;
+  // km do itinerário inteiro, para o resumo da tela "Mais"
+  distanciaTotalKm?: number | null;
   minutos?: number | null;
   distanciaKm?: number | null;
   ocupado?: boolean;
@@ -228,7 +230,8 @@ export default function NavegacaoAtiva({
   passageiro,
   origem,
   destino,
-  metodoPagamento,
+  metodoPagamento: metodoPagamentoAtual,
+  distanciaTotalKm,
   minutos,
   distanciaKm,
   ocupado = false,
@@ -596,11 +599,6 @@ export default function NavegacaoAtiva({
             <View style={styles.informacoesChegada}>
               {status === "em_andamento" && horarioChegada && (
                 <View style={styles.avisoLimiteChegada}>
-                  <Ionicons
-                    name="time-outline"
-                    size={16}
-                    color={tema.cores.icone}
-                  />
                   <Text style={styles.avisoLimiteChegadaTexto}>
                     Chegada prevista:
                     <Text style={styles.avisoLimiteChegadaTextoTempo}>
@@ -611,11 +609,6 @@ export default function NavegacaoAtiva({
               )}
               {status === "aceita" && horarioChegada && (
                 <View style={styles.avisoLimiteChegada}>
-                  <Ionicons
-                    name="time-outline"
-                    size={16}
-                    color={tema.cores.icone}
-                  />
                   <Text style={styles.avisoLimiteChegadaTexto}>
                     Chegue antes de:
                     <Text style={styles.avisoLimiteChegadaTextoTempo}>
@@ -658,6 +651,48 @@ export default function NavegacaoAtiva({
     setSegurancaVisivel(false);
     void Linking.openURL(`tel:${numero}`);
   };
+
+  // ao voltar de outro app a corrida recarrega e a forma de pagamento some por
+  // um instante: guarda a última conhecida para o selo não piscar o passageiro
+  const [pagamentoLembrado, setPagamentoLembrado] = useState<{
+    corrida: string;
+    metodo: string;
+  } | null>(null);
+
+  if (
+    metodoPagamentoAtual &&
+    (pagamentoLembrado?.corrida !== codigoCorrida ||
+      pagamentoLembrado.metodo !== metodoPagamentoAtual)
+  ) {
+    setPagamentoLembrado({
+      corrida: codigoCorrida,
+      metodo: metodoPagamentoAtual,
+    });
+  }
+
+  const metodoPagamento =
+    metodoPagamentoAtual ??
+    (pagamentoLembrado?.corrida === codigoCorrida
+      ? pagamentoLembrado.metodo
+      : null);
+
+  // no passo de finalizar, o selo da forma de pagamento ocupa o lugar do
+  // passageiro; nos demais, fica no alto da folha
+  const finalizando = status === "em_andamento";
+  const seloPagamento = metodoPagamento ? (
+    <View
+      style={[styles.chipPagamento, finalizando && styles.chipPagamentoLargo]}
+    >
+      <Ionicons
+        name={ICONE_PAGAMENTO[metodoPagamento] ?? "cash"}
+        size={28}
+        color={tema.escuro ? "#7FB0FF" : "#1959B3"}
+      />
+      <Text style={styles.chipPagamentoTexto}>
+        Corrida em {ROTULO_PAGAMENTO[metodoPagamento] ?? metodoPagamento}
+      </Text>
+    </View>
+  ) : null;
 
   return (
     <View
@@ -908,78 +943,69 @@ export default function NavegacaoAtiva({
             {paradasDoGrupo && paradasDoGrupo.length > 0 && (
               <ListaParadasDoGrupo paradas={paradasDoGrupo} />
             )}
-            {metodoPagamento && (
-              <View style={styles.chipPagamento}>
-                <Ionicons
-                  name={ICONE_PAGAMENTO[metodoPagamento] ?? "cash"}
-                  size={18}
-                  color={tema.escuro ? "#7FB0FF" : "#1959B3"}
-                />
-                <Text style={styles.chipPagamentoTexto}>
-                  Corrida em{" "}
-                  {ROTULO_PAGAMENTO[metodoPagamento] ?? metodoPagamento}
-                </Text>
-              </View>
-            )}
 
             <View style={styles.separador} />
 
-            <View style={styles.linhaPassageiro}>
-              {/* o perfil do passageiro só abre depois do embarque */}
-              <TouchableOpacity
-                activeOpacity={0.8}
-                disabled={!onAbrirPerfilPassageiro || status === "aceita"}
-                accessibilityRole="button"
-                accessibilityLabel="Ver o perfil do passageiro"
-                onPress={onAbrirPerfilPassageiro}
-              >
-                {passageiro?.foto && !passageiro.foto_oculta ? (
-                  <Image
-                    source={{ uri: passageiro.foto }}
-                    style={styles.avatar}
-                    // a foto fica censurada até o motorista chegar ao embarque; o avatar não
-                    blurRadius={
-                      status === "aceita" && !passageiro.foto_e_avatar
-                        ? BLUR_DA_FOTO
-                        : 0
-                    }
-                  />
-                ) : (
-                  <View
-                    style={[
-                      styles.avatar,
-                      styles.avatarVazio,
-                      passageiro?.foto_oculta && styles.avatarProtegido,
-                    ]}
-                  >
-                    <Feather name="user" size={24} color="#888" />
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              <View style={styles.passageiroBloco}>
-                <Text style={styles.passageiroNome}>
-                  {passageiro?.nome ?? "Passageiro"}
-                </Text>
-                <Text style={styles.passageiroApoio}>
-                  {reputacaoPassageiro(
-                    passageiro?.nota,
-                    passageiro?.corridas,
-                    passageiro?.novo,
+            {finalizando && seloPagamento ? (
+              seloPagamento
+            ) : (
+              <View style={styles.linhaPassageiro}>
+                {/* o perfil do passageiro só abre depois do embarque */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  disabled={!onAbrirPerfilPassageiro || status === "aceita"}
+                  accessibilityRole="button"
+                  accessibilityLabel="Ver o perfil do passageiro"
+                  onPress={onAbrirPerfilPassageiro}
+                >
+                  {passageiro?.foto && !passageiro.foto_oculta ? (
+                    <Image
+                      source={{ uri: passageiro.foto }}
+                      style={styles.avatar}
+                      // a foto fica censurada até o motorista chegar ao embarque; o avatar não
+                      blurRadius={
+                        status === "aceita" && !passageiro.foto_e_avatar
+                          ? BLUR_DA_FOTO
+                          : 0
+                      }
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.avatar,
+                        styles.avatarVazio,
+                        passageiro?.foto_oculta && styles.avatarProtegido,
+                      ]}
+                    >
+                      <Feather name="user" size={24} color="#888" />
+                    </View>
                   )}
-                  {passageiro?.solicitante
-                    ? ` · Pedido por ${passageiro.solicitante}`
-                    : ""}
-                </Text>
-              </View>
+                </TouchableOpacity>
 
-              <BotaoContatoPassageiro
-                naoLidas={chatNaoLidas}
-                onChat={onAbrirChat}
-                onLigar={passageiro?.telefone ? ligar : undefined}
-                estilo={styles.botaoLigar}
-              />
-            </View>
+                <View style={styles.passageiroBloco}>
+                  <Text style={styles.passageiroNome}>
+                    {passageiro?.nome ?? "Passageiro"}
+                  </Text>
+                  <Text style={styles.passageiroApoio}>
+                    {reputacaoPassageiro(
+                      passageiro?.nota,
+                      passageiro?.corridas,
+                      passageiro?.novo,
+                    )}
+                    {passageiro?.solicitante
+                      ? ` · Pedido por ${passageiro.solicitante}`
+                      : ""}
+                  </Text>
+                </View>
+
+                <BotaoContatoPassageiro
+                  naoLidas={chatNaoLidas}
+                  onChat={onAbrirChat}
+                  onLigar={passageiro?.telefone ? ligar : undefined}
+                  estilo={styles.botaoLigar}
+                />
+              </View>
+            )}
 
             <BotaoDeslizar
               rotulo={passo.rotulo}
@@ -999,6 +1025,17 @@ export default function NavegacaoAtiva({
         origem={origem}
         destino={destino}
         categoria={categoria}
+        metodoPagamento={metodoPagamento}
+        distanciaTotalKm={distanciaTotalKm}
+        chatNaoLidas={chatNaoLidas}
+        onAbrirChat={
+          onAbrirChat
+            ? () => {
+                setMaisVisivel(false);
+                onAbrirChat();
+              }
+            : undefined
+        }
         ocupado={ocupado}
         podeCancelar={status === "aceita"}
         recusarNovas={recusarNovas}
@@ -1162,13 +1199,13 @@ const estilosBase = StyleSheet.create({
   },
   avisoLimiteChegadaTexto: {
     color: "#111",
-    fontSize: 13,
+    fontSize: 17,
     fontWeight: "700",
     textAlign: "center",
   },
   avisoLimiteChegadaTextoTempo: {
     color: "#C2410C",
-    fontSize: 13,
+    fontSize: 17,
     fontWeight: "700",
     textAlign: "center",
   },
@@ -1316,10 +1353,20 @@ const estilosBase = StyleSheet.create({
   chipPagamentoTexto: {
     flexShrink: 1,
     color: "#1959B3",
-    fontSize: 15,
+    fontSize: 21,
     fontWeight: "700",
   },
   separador: { height: 1, backgroundColor: "#EEE" },
+  // na tela de finalizar o selo é uma faixa, um pouco mais estreita que o
+  // botão de baixo, com o conteúdo à esquerda
+  chipPagamentoLargo: {
+    alignSelf: "stretch",
+    justifyContent: "flex-start",
+    minHeight: 52,
+    marginHorizontal: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+  },
   linhaPassageiro: { flexDirection: "row", alignItems: "center", gap: 12 },
   avatar: { width: 47, height: 47, borderRadius: 23.5 },
   avatarVazio: {
