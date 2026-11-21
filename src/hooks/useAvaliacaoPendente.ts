@@ -35,6 +35,8 @@ export function useAvaliacaoPendente(recarregarQuando: unknown) {
   // inicial espera essa resposta em vez de aparecer e ser coberta em seguida
   const [verificando, setVerificando] = useState(false);
   const [anterior, setAnterior] = useState<unknown>(recarregarQuando);
+  // corridas já avaliadas ou dispensadas nesta sessão: a tela delas não volta
+  const encerradas = useRef<Set<number>>(new Set());
 
   // marcado já na renderização em que a corrida some, para não haver um
   // quadro com a tela inicial antes da checagem começar
@@ -62,7 +64,11 @@ export function useAvaliacaoPendente(recarregarQuando: unknown) {
         pendente !== null &&
         (pendente.id === terminadaId || pendente.compartilhada != null);
 
-      if (pendente === null || !dasessao) {
+      if (
+        pendente === null ||
+        !dasessao ||
+        encerradas.current.has(pendente.id)
+      ) {
         setCorrida(null);
         return;
       }
@@ -139,6 +145,7 @@ export function useAvaliacaoPendente(recarregarQuando: unknown) {
 
         await AsyncStorage.removeItem(chaveLembrete(corrida.id));
 
+        encerradas.current.add(corrida.id);
         setCorrida(null);
         mostrarToast({
           tipo: "success",
@@ -172,6 +179,7 @@ export function useAvaliacaoPendente(recarregarQuando: unknown) {
       );
     }
 
+    if (corrida !== null) encerradas.current.add(corrida.id);
     setCorrida(null);
   }, [corrida]);
 

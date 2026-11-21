@@ -8,6 +8,7 @@ import ChatDaCorrida from "@/components/ChatDaCorrida";
 import CorridaEmAndamento from "@/components/CorridaEmAndamento";
 import DinheiroRecebido from "@/components/DinheiroRecebido";
 import FolhaInferiorMotorista from "@/components/FolhaInferiorMotorista";
+import DefinirDestino from "@/components/DefinirDestino";
 import GanhoDiario from "@/components/GanhoDiario";
 import Map, { ABERTURA_DO_MAPA } from "@/components/Map";
 import MenuInferiorMotorista from "@/components/MenuInferiorMotorista";
@@ -104,6 +105,8 @@ export default function Home() {
   const [destinationModalVisible, setDestinationModalVisible] = useState(false);
   const [solicitacoesCorrida, setSolicitacoesCorrida] = useState(false);
   const simuladorCorrida = useSimuladorCorridaMotorista();
+  // regra: com a avaliação na tela (ou sendo verificada) nenhuma chamada toca
+  const [semChamadas, setSemChamadas] = useState(false);
   const { empilhar, alternar: alternarEmpilhar } = useEmpilharNegociadas();
   const { ativo: aceitarPorGesto, definir: definirAceitarPorGesto } =
     useAceitarPorGesto();
@@ -138,7 +141,22 @@ export default function Home() {
     responderNovoDestino,
     ganhoRecebido,
     fecharGanhoRecebido,
-  } = useDespachoMotorista(simuladorCorrida.ativa);
+  } = useDespachoMotorista(simuladorCorrida.ativa, semChamadas);
+
+  const {
+    corrida: corridaParaAvaliar,
+    enviando: enviandoAvaliacao,
+    verificando: verificandoAvaliacao,
+    avaliar,
+    bloquear: bloquearPassageiro,
+    dispensar: dispensarAvaliacao,
+  } = useAvaliacaoPendente(corrida?.id ?? null);
+  const bloqueioPorAvaliacao =
+    !simuladorCorrida.ativa &&
+    (corridaParaAvaliar !== null || verificandoAvaliacao);
+  // ajustado já nesta renderização, sem um quadro de atraso
+  if (semChamadas !== bloqueioPorAvaliacao)
+    setSemChamadas(bloqueioPorAvaliacao);
 
   const dadosSimulados = simuladorCorrida.dados;
   const corridaExibida = simuladorCorrida.ativa
@@ -146,7 +164,9 @@ export default function Home() {
     : corrida;
   const ofertaExibida = simuladorCorrida.ativa
     ? (dadosSimulados?.oferta ?? null)
-    : oferta;
+    : bloqueioPorAvaliacao
+      ? null
+      : oferta;
   const chegadaExibida = simuladorCorrida.ativa
     ? (dadosSimulados?.chegada ?? null)
     : chegada;
@@ -172,6 +192,7 @@ export default function Home() {
   const chamadaNoMapa = ofertaExibida !== null && corridaExibida === null;
   const { rota: rotaDaOferta, pontos: pontosDaOferta } = useRotaDaOferta(
     chamadaNoMapa && !simuladorCorrida.ativa ? ofertaExibida : null,
+    posicaoExibida,
   );
   const [alturaDaChamada, setAlturaDaChamada] = useState(0);
   // no embarque, a altura medida da folha com as mensagens rápidas
@@ -291,17 +312,9 @@ export default function Home() {
     simuladorCorrida.ativa ? null : posicaoExibida,
   );
 
-  const {
-    corrida: corridaParaAvaliar,
-    enviando: enviandoAvaliacao,
-    verificando: verificandoAvaliacao,
-    avaliar,
-    bloquear: bloquearPassageiro,
-    dispensar: dispensarAvaliacao,
-  } = useAvaliacaoPendente(corrida?.id ?? null);
   // a avaliação vem antes: a tela inicial (menu, folha, topo) e a animação do
-  // dinheiro só voltam depois que ela é fechada. Com uma chamada tocando, a
-  // tela inicial precisa aparecer para a chamada.
+  // dinheiro só voltam depois que ela é fechada. Nenhuma chamada toca enquanto
+  // ela está na tela.
   const aguardandoAvaliacao =
     (corridaParaAvaliar !== null ||
       verificandoAvaliacao ||
@@ -371,6 +384,7 @@ export default function Home() {
 
   // ✨ NOVO: Estado do modal de ganhos foi elevado para cá
   const [ganhoModalVisivel, setGanhoModalVisivel] = useState(false);
+  const [destinoAberto, setDestinoAberto] = useState(false);
   // perfil público do passageiro (toque na foto ou avatar dele, depois do embarque)
   const [perfilPassageiroAberto, setPerfilPassageiroAberto] = useState(false);
   const perfilDoPassageiro = usePerfilDoPassageiro(
@@ -472,8 +486,8 @@ export default function Home() {
         <Map
           region={regiaoSimulada ?? region}
           dinamica={dinamicaExibida}
-          // enquanto a chamada toca o mapa fica travado no trajeto
-          travado={chamadaNoMapa}
+          // em corrida ou com chamada tocando o mapa de calor não aparece
+          ocultarCalor={corridaExibida !== null || chamadaNoMapa}
           onRegionChange={simuladorCorrida.ativa ? () => undefined : setRegion}
           onUserLocationFound={
             simuladorCorrida.ativa ? undefined : handleUserLocationFound
@@ -851,9 +865,19 @@ export default function Home() {
           {!statusComNavegacao &&
             !telaDeEspera &&
             !chamadaNoMapa &&
-            !folhaAberta && <TopMenu onMenuPress={handleMenuOpen} />}
+            !folhaAberta && (
+              <TopMenu
+                onMenuPress={handleMenuOpen}
+                onBuscarPress={() => setDestinoAberto(true)}
+              />
+            )}
         </Reanimated.View>
       )}
+
+      <DefinirDestino
+        visible={destinoAberto}
+        onClose={() => setDestinoAberto(false)}
+      />
 
       {/* Backdrop para SideMenu */}
       {menuVisible && <Pressable style={styles.backdrop} onPress={closeMenu} />}

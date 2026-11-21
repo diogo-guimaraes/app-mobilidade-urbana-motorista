@@ -6,9 +6,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 interface TopMenuProps {
   onMenuPress: () => void;
+  // lupa no canto direito: abre a tela de definir destino
+  onBuscarPress?: () => void;
 }
 
-export default function TopMenu({ onMenuPress }: TopMenuProps) {
+export default function TopMenu({
+  onMenuPress,
+  onBuscarPress,
+}: TopMenuProps) {
   const { cores } = useTema();
 
   return (
@@ -27,6 +32,18 @@ export default function TopMenu({ onMenuPress }: TopMenuProps) {
           <Ionicons name="menu" size={26} color={cores.icone} />
         </TouchableOpacity>
       </View>
+      {onBuscarPress ? (
+        <View style={[styles.topMenu, { backgroundColor: cores.superficie }]}>
+          <TouchableOpacity
+            onPress={onBuscarPress}
+            style={styles.iconButton}
+            accessibilityRole="button"
+            accessibilityLabel="Definir destino"
+          >
+            <Ionicons name="search" size={24} color={cores.icone} />
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -38,6 +55,8 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     zIndex: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   topMenu: {
     marginHorizontal: 14,

@@ -69,11 +69,11 @@ interface MapProps {
   alturaMinimaRodape?: number;
   // botão flutuante extra, empilhado acima do "centralizar"
   botaoAcima?: React.ReactNode;
-  // mapa travado (sem arrastar, zoom nem girar), como enquanto a chamada toca
-  travado?: boolean;
   // esconde os botões do canto (centralizar, camadas): na espera no embarque eles
   // só aparecem depois das mensagens rápidas
   ocultarBotoes?: boolean;
+  // sem o mapa de calor (chamada tocando ou corrida em andamento)
+  ocultarCalor?: boolean;
   // preço dinâmico: hexágonos de alta demanda pintados do amarelo ao vermelho
   dinamica?: MapaDinamico | null;
   // embarque, paradas e destino da chamada que está tocando
@@ -137,8 +137,8 @@ export default function Map({
   botaoAcima,
   marcadores = [],
   dinamica = null,
-  travado = false,
   ocultarBotoes = false,
+  ocultarCalor = false,
 }: MapProps) {
   const { height: alturaTela } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -565,11 +565,6 @@ export default function Map({
             ? { top: insets.top + 60, right: 0, bottom: alturaFolha, left: 0 }
             : SEM_PADDING
         }
-        // travado: a chamada toca com o trajeto enquadrado e o dedo não desfaz isso
-        scrollEnabled={!travado}
-        zoomEnabled={!travado}
-        rotateEnabled={!travado}
-        pitchEnabled={!travado}
         showsUserLocation={false}
         showsMyLocationButton={false}
         followsUserLocation={false}
@@ -580,7 +575,8 @@ export default function Map({
         onMapReady={mapaPronto}
         onMapLoaded={mapaCarregado}
       >
-        {dinamica && !afastadoDemais && (
+        {/* chamada ou corrida: sem mapa de calor por cima do trajeto */}
+        {dinamica && !afastadoDemais && !ocultarCalor && (
           <RegioesDinamicas mapa={dinamica} camadas={camadas} />
         )}
 
@@ -738,7 +734,7 @@ export default function Map({
             ]}
           >
             {/* recentralizar fica sempre por cima dos outros botões */}
-            {mapaMovido && !travado && (
+            {mapaMovido && (
               <TouchableOpacity
                 accessibilityLabel="Centralizar na minha localização"
                 accessibilityRole="button"
@@ -762,20 +758,18 @@ export default function Map({
               </TouchableOpacity>
             )}
             {botaoAcima}
-            {!travado && (
-              <TouchableOpacity
-                accessibilityLabel="Camadas do mapa"
-                accessibilityRole="button"
-                style={[styles.centerButton, botaoEscuro]}
-                onPress={() => setCamadasAbertas(true)}
-              >
-                <MaterialIcons
-                  name="layers"
-                  size={24}
-                  color={tema.escuro ? "#F3F4F6" : "#111111"}
-                />
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              accessibilityLabel="Camadas do mapa"
+              accessibilityRole="button"
+              style={[styles.centerButton, botaoEscuro]}
+              onPress={() => setCamadasAbertas(true)}
+            >
+              <MaterialIcons
+                name="layers"
+                size={24}
+                color={tema.escuro ? "#F3F4F6" : "#111111"}
+              />
+            </TouchableOpacity>
           </Animated.View>
         )}
 

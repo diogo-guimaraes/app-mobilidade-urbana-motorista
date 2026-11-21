@@ -282,24 +282,62 @@ export default function RecebendoChamadas({
 
   const conteudo = (
     <>
-      <View style={[styles.topo, !negociavel && styles.topoCentralizado]}>
+      <View style={styles.topo}>
         <Animated.View
           pointerEvents="none"
           style={[styles.tempoFundo, { width: larguraDoTempo }]}
         />
+        {/* forma de pagamento: canto de cima à esquerda do card */}
+        {!negociavel ? (
+          <View style={[styles.chipPagamento, styles.chipPagamentoTopo]}>
+            <Ionicons name={pagamento.nome} size={15} color={pagamento.cor} />
+            <Text style={styles.chipPagamentoTexto}>{pagamento.rotulo}</Text>
+          </View>
+        ) : null}
+        {/* fechar dentro do card, no canto de cima à direita */}
+        <TouchableOpacity
+          style={[
+            styles.fechar,
+            negociavel ? styles.fecharNegocia : styles.fecharNormal,
+          ]}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={
+            negociavel
+              ? "Fechar a chamada, não afeta a taxa de aceitação"
+              : "Recusar a chamada"
+          }
+          onPress={negociavel ? dispensar : closeAndUnload}
+        >
+          <Ionicons name="close" size={negociavel ? 20 : 22} color="#FFF" />
+          {negociavel ? (
+            <Text style={styles.fecharTexto}>Não afeta a TA</Text>
+          ) : null}
+        </TouchableOpacity>
         {negociavel ? (
           <View style={styles.chip}>
             <Text style={styles.chipTexto}>{titulo}</Text>
           </View>
-        ) : (
-          <Text style={styles.tituloCentral}>{titulo}</Text>
-        )}
-        <Text style={styles.valor}>{emReais(valor)}</Text>
+        ) : null}
+        <View style={styles.valorLinha}>
+          <Text style={styles.valor}>{emReais(valor)}</Text>
+          {!negociavel && dinamico?.multiplicador ? (
+            <View style={styles.chipMultiplicador}>
+              <Ionicons name="flash" size={15} color="#FFC400" />
+              <Text style={styles.chipDinamicoTexto}>
+                {textoDoMultiplicador(dinamico.multiplicador)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
         {valorPorKm ? (
           <Text style={[styles.valorKm, !negociavel && styles.valorKmDestaque]}>
             {/* no grupo o valor é da viagem inteira, não de um passageiro */}
             {compartilhada ? `pela viagem toda · ${valorPorKm}` : valorPorKm}
           </Text>
+        ) : null}
+        {!negociavel ? (
+          <Text style={styles.tituloCentral}>{titulo}</Text>
         ) : null}
         {!negociavel ? (
           <View style={styles.chipsLinha}>
@@ -314,14 +352,6 @@ export default function RecebendoChamadas({
                 </Text>
               </View>
             ) : null}
-            {dinamico?.multiplicador ? (
-              <View style={styles.chipDinamico}>
-                <Ionicons name="flash" size={15} color="#FFC400" />
-                <Text style={styles.chipDinamicoTexto}>
-                  {textoDoMultiplicador(dinamico.multiplicador)}
-                </Text>
-              </View>
-            ) : null}
             {dinamico ? (
               <View style={styles.chipDinamico}>
                 <Ionicons name="cash" size={15} color="#FFC400" />
@@ -330,10 +360,6 @@ export default function RecebendoChamadas({
                 </Text>
               </View>
             ) : null}
-            <View style={styles.chipPagamento}>
-              <Ionicons name={pagamento.nome} size={15} color={pagamento.cor} />
-              <Text style={styles.chipPagamentoTexto}>{pagamento.rotulo}</Text>
-            </View>
           </View>
         ) : null}
         <Animated.View
@@ -352,23 +378,6 @@ export default function RecebendoChamadas({
           <Text style={styles.reputacaoTexto}>{reputacao}</Text>
         </View>
 
-        {typeof distanciaDaCorrida === "number" ? (
-          <View style={styles.resumoCorrida}>
-            <View style={styles.resumoItem}>
-              <Ionicons name="time-outline" size={20} color="#E8E8E8" />
-              <Text style={styles.resumoTexto}>
-                {minutosEstimados(distanciaDaCorrida)} min
-              </Text>
-            </View>
-            <View style={styles.resumoItem}>
-              <Ionicons name="navigate-outline" size={20} color="#E8E8E8" />
-              <Text style={styles.resumoTexto}>
-                {emDistancia(distanciaDaCorrida)}
-              </Text>
-            </View>
-            <Text style={styles.resumoApoio}>da corrida</Text>
-          </View>
-        ) : null}
 
         <View style={styles.separador} />
 
@@ -471,27 +480,6 @@ export default function RecebendoChamadas({
       ]}
       pointerEvents="box-none"
     >
-      <TouchableOpacity
-        style={[
-          styles.fechar,
-          negociavel ? styles.fecharNegocia : styles.fecharNormal,
-          { top: insets.top + 12 },
-        ]}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityLabel={
-          negociavel
-            ? "Fechar a chamada, não afeta a taxa de aceitação"
-            : "Recusar a chamada"
-        }
-        onPress={negociavel ? dispensar : closeAndUnload}
-      >
-        <Ionicons name="close" size={negociavel ? 20 : 26} color="#FFF" />
-        {negociavel ? (
-          <Text style={styles.fecharTexto}>Não afeta a TA</Text>
-        ) : null}
-      </TouchableOpacity>
-
       {aceitarPorGesto ? (
         <Suspense fallback={null}>
           {/* o mesmo que os botões: tocar no card aceita, o X recusa */}
@@ -543,16 +531,17 @@ const styles = StyleSheet.create({
   },
   fechar: {
     position: "absolute",
-    right: 14,
+    top: 10,
+    right: 10,
+    zIndex: 5,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "#1F1F1F",
-    elevation: 6,
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
-  fecharNormal: { width: 52, height: 52, borderRadius: 26 },
-  fecharNegocia: { height: 44, borderRadius: 22, paddingHorizontal: 16 },
+  fecharNormal: { width: 40, height: 40, borderRadius: 20 },
+  fecharNegocia: { height: 36, borderRadius: 18, paddingHorizontal: 12 },
   fecharTexto: { color: "#FFF", fontSize: 15, fontWeight: "600" },
   cardArea: { paddingHorizontal: 12 },
   card: {
@@ -588,9 +577,9 @@ const styles = StyleSheet.create({
   chipTexto: { color: "#FFF", fontSize: 16, fontWeight: "700" },
   tituloCentral: {
     color: "#FFF",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "500",
-    marginBottom: 2,
+    marginTop: 2,
   },
   valor: { color: "#FFF", fontSize: 44, fontWeight: "700", lineHeight: 52 },
   valorKm: { color: "#BDBDBD", fontSize: 15, marginTop: 2 },
@@ -603,7 +592,17 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.1)",
     paddingHorizontal: 12,
     paddingVertical: 5,
-    marginTop: 8,
+  },
+  chipPagamentoTopo: { marginBottom: 6 },
+  valorLinha: { flexDirection: "row", alignItems: "center", gap: 10 },
+  chipMultiplicador: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,196,0,0.16)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   chipPagamentoTexto: { color: "#F5C542", fontSize: 14, fontWeight: "600" },
   chipDinamico: {
@@ -620,7 +619,6 @@ const styles = StyleSheet.create({
   chipsLinha: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "center",
     gap: 8,
   },
   chipCompartilhada: {
@@ -637,15 +635,6 @@ const styles = StyleSheet.create({
   corpo: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 18 },
   reputacao: { flexDirection: "row", alignItems: "center", gap: 8 },
   reputacaoTexto: { color: "#FFF", fontSize: 16 },
-  resumoCorrida: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 18,
-    marginTop: 10,
-  },
-  resumoItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  resumoTexto: { color: "#FFF", fontSize: 17, fontWeight: "700" },
-  resumoApoio: { color: "#B5B5B5", fontSize: 14 },
   separador: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: "#4A4A4A",

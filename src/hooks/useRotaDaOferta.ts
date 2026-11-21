@@ -13,25 +13,42 @@ const valido = (ponto: Coordenada) =>
   !(ponto.latitude === 0 && ponto.longitude === 0);
 
 // enquanto a chamada toca, o mapa mostra o trajeto da corrida (embarque,
-// paradas e destino), como no 99. O traçado de cada corrida é pedido uma vez.
-export function useRotaDaOferta(oferta: OfertaCorrida | null) {
+// paradas e destino), como no 99, começando de onde o motorista está: a linha
+// vai do motorista até o embarque e segue pelo itinerário. O traçado de cada
+// corrida é pedido uma vez, com a posição do motorista no momento em que ele chega.
+export function useRotaDaOferta(
+  oferta: OfertaCorrida | null,
+  posicaoMotorista: Coordenada | null = null,
+) {
   const [tracados, setTracados] = useState<Record<number, Coordenada[]>>({});
 
   const corridaId = oferta?.corrida_id ?? null;
   const pontos: PontoDaOferta[] = (oferta?.trajeto ?? []).filter(valido);
+  const motorista =
+    posicaoMotorista !== null && valido(posicaoMotorista)
+      ? {
+          latitude: posicaoMotorista.latitude,
+          longitude: posicaoMotorista.longitude,
+        }
+      : null;
+  const temMotorista = motorista !== null;
   const chavePontos = pontos
     .map((ponto) => `${ponto.latitude},${ponto.longitude}`)
     .join(";");
 
   useEffect(() => {
     if (corridaId === null || tracados[corridaId] || pontos.length < 2) return;
+    // sem a posição o traçado sairia só do embarque: espera ela chegar
+    if (!temMotorista) return;
+
+    const percurso = [motorista, ...pontos];
 
     let ativo = true;
     api
       .post<{ coordinates: Coordenada[] }>(
         "/tracado-rota",
         {
-          pontos: pontos.slice(0, 6).map(({ latitude, longitude }) => ({
+          pontos: percurso.slice(0, 6).map(({ latitude, longitude }) => ({
             latitude,
             longitude,
           })),
@@ -48,7 +65,7 @@ export function useRotaDaOferta(oferta: OfertaCorrida | null) {
         if (!ativo) return;
         setTracados((atuais) => ({
           ...atuais,
-          [corridaId]: pontos.map(({ latitude, longitude }) => ({
+          [corridaId]: percurso.map(({ latitude, longitude }) => ({
             latitude,
             longitude,
           })),
@@ -60,7 +77,7 @@ export function useRotaDaOferta(oferta: OfertaCorrida | null) {
     };
     // os pontos entram pela chave: o array é recriado a cada render
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [corridaId, chavePontos]);
+  }, [corridaId, chavePontos, temMotorista]);
 
   const rota = corridaId === null ? [] : (tracados[corridaId] ?? []);
 

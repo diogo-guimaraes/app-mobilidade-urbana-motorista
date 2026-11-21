@@ -209,7 +209,9 @@ const mensagemDoErro = (erro: unknown, padrao: string) => {
   return resposta?.data?.message ?? padrao;
 };
 
-export function useDespachoMotorista(pausado = false) {
+// `semChamadas`: o motorista está numa tela que não pode ser interrompida (ex.:
+// avaliação). A chamada não toca nem pesa na taxa de aceitação até ele sair.
+export function useDespachoMotorista(pausado = false, semChamadas = false) {
   const { mostrarToast } = useToast();
   const [disponivel, setDisponivel] = useState(false);
   const [oferta, setOferta] = useState<OfertaCorrida | null>(null);
@@ -934,7 +936,7 @@ export function useDespachoMotorista(pausado = false) {
   // a chamada só pesa na taxa de aceitação depois de aparecer na tela; o
   // backend guarda o primeiro toque, então a mesma corrida avisa uma vez
   const toquesAvisados = useRef<Set<number>>(new Set());
-  const corridaDaChamada = oferta?.corrida_id;
+  const corridaDaChamada = semChamadas ? undefined : oferta?.corrida_id;
   useEffect(() => {
     if (pausado || corridaDaChamada === undefined) return;
     if (toquesAvisados.current.has(corridaDaChamada)) return;
