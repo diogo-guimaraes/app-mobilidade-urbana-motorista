@@ -1,5 +1,5 @@
-// Preço dinâmico no mapa do motorista: hexágonos de alta demanda, do amarelo
-// (pouco) ao vermelho (muito), cada um com o valor extra da corrida ali.
+// Preço dinâmico no mapa do motorista: hexágonos de alta demanda, do salmão
+// (pouco) ao vinho (muito), com o valor extra da corrida em cada bloco.
 // A grade é a mesma do backend (App\Support\GradeHexagonal): pontas para cima,
 // coordenadas axiais, projeção Mercator.
 
@@ -28,10 +28,27 @@ export interface MapaDinamico {
   modo: ModoDinamica | null;
   // raio do hexágono em metros da projeção
   raio_metros: number;
+  // teto de multiplicador da cidade (3,0 sem outro valor definido)
+  multiplicador_maximo?: number;
   regioes: RegiaoDinamica[];
+  // blocos de regiões vizinhas, um selo por bloco com o menor e o maior valor
+  clusters?: ClusterDinamico[];
   // procura por corrida, sem depender de ter tarifa; sem isso a camada usa as
   // próprias regiões com tarifa
   demandas?: DemandaDaRegiao[];
+}
+
+export interface ClusterDinamico {
+  id: string;
+  // chaves "q:r" das células do bloco
+  celulas: string[];
+  // centro do bloco, onde fica o selo
+  latitude: number;
+  longitude: number;
+  min_multiplicador: number;
+  max_multiplicador: number;
+  // "1,1x-1,4x" ou "1,5x" quando o menor e o maior são iguais
+  rotulo: string;
 }
 
 export interface DemandaDaRegiao {
@@ -49,12 +66,12 @@ export interface Ponto {
 
 const RAIO_TERRA = 6378137;
 
-const projetar = ({ latitude, longitude }: Ponto): [number, number] => [
+export const projetar = ({ latitude, longitude }: Ponto): [number, number] => [
   RAIO_TERRA * ((longitude * Math.PI) / 180),
   RAIO_TERRA * Math.log(Math.tan(Math.PI / 4 + (latitude * Math.PI) / 360)),
 ];
 
-const desprojetar = (x: number, y: number): Ponto => ({
+export const desprojetar = (x: number, y: number): Ponto => ({
   longitude: ((x / RAIO_TERRA) * 180) / Math.PI,
   latitude:
     ((2 * Math.atan(Math.exp(y / RAIO_TERRA)) - Math.PI / 2) * 180) / Math.PI,
@@ -99,8 +116,8 @@ export function corDaIntensidade(intensidade: number): {
   ];
 
   return {
-    // quanto mais quente, mais cobre o mapa (como nos apps de referência)
-    preenchimento: `rgba(${r},${g},${b},${(0.3 + 0.25 * i).toFixed(2)})`,
+    // fundo chapado na cor do dinâmico; quanto mais quente, mais cobre o mapa
+    preenchimento: `rgba(${r},${g},${b},${(0.5 + 0.2 * i).toFixed(2)})`,
     borda: `rgba(${r},${g},${b},0.9)`,
     // o rótulo é sólido e mais escuro, para ler sobre o mapa
     rotulo: `rgb(${Math.round(r * 0.82)},${Math.round(g * 0.62)},${Math.round(b * 0.5)})`,
@@ -125,7 +142,7 @@ export const demandaDaRegiao = (regiao: RegiaoDinamica): number =>
  * (duas pessoas) e 3 extrema (grupo).
  */
 export const nivelDaDemanda = (demanda: number): 1 | 2 | 3 =>
-  demanda >= 0.8 ? 3 : demanda >= 0.55 ? 2 : 1;
+  demanda >= 0.7 ? 3 : demanda >= 0.45 ? 2 : 1;
 
 export interface IconeDeDemanda {
   celula: string;

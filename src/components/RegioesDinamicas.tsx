@@ -1,8 +1,7 @@
-import { Text } from "@/components/common/Texto";
+import DemandaSuave from "@/components/DemandaSuave";
+import SeloDinamico from "@/components/SeloDinamico";
 import {
   iconesDaDemanda,
-  corDaDemanda,
-  corDaIntensidade,
   demandaDaRegiao,
   verticesDoHexagono,
   type CamadasDoMapa,
@@ -12,6 +11,11 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { memo, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { Marker, Polygon } from "react-native-maps";
+import { LIMITE_ICONES, LIMITE_NIVEL_1 } from "@/theme/demandaCores";
+import {
+  corDoMultiplicador,
+  multiplicadorEquivalente,
+} from "@/theme/dinamicaCores";
 import { useTema } from "@/theme/tema";
 
 interface Props {
@@ -19,28 +23,30 @@ interface Props {
   camadas: CamadasDoMapa;
 }
 
-const SEM_PREENCHIMENTO = "rgba(0,0,0,0)";
-
 /**
  * Camadas do mapa de calor, dentro do MapView:
  * - Demanda: manchas sem borda por baixo, mais fortes onde há mais procura, com
  *   de 1 a 4 bonequinhos no centro;
- * - Tarifas: só as bordas dos hexágonos (sem fundo) e, no centro, o valor extra
- *   ("1,5x" ou "+R$2,25").
+ * - Tarifas: hexágonos sem borda, na cor sólida da faixa do multiplicador (a
+ *   demanda não aparece por baixo), e um selo por bloco de regiões vizinhas com o menor e o maior valor ("1,1x-1,4x").
  */
 function RegioesDinamicas({ mapa, camadas }: Props) {
   const desenhos = useMemo(
     () =>
       mapa.regioes.map((regiao) => ({
         regiao,
-        cores: corDaIntensidade(regiao.intensidade),
+        cor: corDoMultiplicador(
+          mapa.modo === "valor_fixo"
+            ? multiplicadorEquivalente(regiao.intensidade)
+            : regiao.multiplicador,
+        ),
         vertices: verticesDoHexagono(regiao, mapa.raio_metros),
       })),
     [mapa],
   );
 
   // a demanda vale sozinha: cobre também onde não há tarifa
-  const { manchas, icones, comTarifa } = useMemo(() => {
+  const { lista, candidatas, comTarifa } = useMemo(() => {
     const comTarifa = new Set(mapa.regioes.map((regiao) => regiao.celula));
     const lista = (
       mapa.demandas ??
@@ -50,66 +56,64 @@ function RegioesDinamicas({ mapa, camadas }: Props) {
         longitude: regiao.longitude,
         demanda: demandaDaRegiao(regiao),
       }))
-    ).filter((area) => area.demanda >= 0.2);
+    ).filter((area) => area.demanda >= LIMITE_NIVEL_1);
 
     return {
       comTarifa,
-      manchas: lista.map((area) => ({
-        area,
-        corDaMancha: corDaDemanda(area.demanda),
-        vertices: verticesDoHexagono(area, mapa.raio_metros),
-      })),
-      // um ícone (ou dois) por área do mesmo nível, não um por célula
-      icones: iconesDaDemanda(lista),
+      lista,
+      candidatas: lista.filter((area) => area.demanda >= LIMITE_ICONES),
     };
   }, [mapa]);
 
+  // onde há tarifa dinâmica o valor ocupa o centro: sem bonequinho ali, e a
+  // área de ícones é refeita só com as células sem tarifa
+  const icones = useMemo(
+    () =>
+      iconesDaDemanda(
+        camadas.tarifas
+          ? candidatas.filter((area) => !comTarifa.has(area.celula))
+          : candidatas,
+      ),
+    [candidatas, comTarifa, camadas.tarifas],
+  );
+
   return (
     <>
-      {camadas.demanda &&
-        manchas.map(({ area, corDaMancha, vertices }) => (
-          <Polygon
-            key={`mancha:${area.celula}`}
-            coordinates={vertices}
-            fillColor={corDaMancha}
-            strokeWidth={0}
-            strokeColor="rgba(0,0,0,0)"
-            // por baixo de tudo, inclusive das bordas das tarifas
-            zIndex={1}
-          />
-        ))}
+      {camadas.demanda && (
+        <DemandaSuave
+          areas={lista}
+          raioMetros={mapa.raio_metros}
+          // o hexágono do dinâmico é sólido: a mancha fica só fora dele
+          ocultas={camadas.tarifas ? comTarifa : undefined}
+        />
+      )}
       {camadas.tarifas &&
-        desenhos.map(({ regiao, cores, vertices }) => (
+        desenhos.map(({ regiao, cor, vertices }) => (
           <Polygon
             key={`area:${regiao.celula}`}
             coordinates={vertices}
-            fillColor={SEM_PREENCHIMENTO}
-            strokeColor={cores.borda}
-            strokeWidth={1.5}
+            fillColor={cor}
+            strokeColor="rgba(0,0,0,0)"
+            strokeWidth={0}
             // abaixo da rota (10) e dos pontos da corrida (20)
             zIndex={2}
           />
         ))}
       {camadas.demanda &&
-        icones.map((icone) => {
-          const abaixo = camadas.tarifas && comTarifa.has(icone.celula);
-
-          return (
-            <BonequinhosDaRegiao
-              key={`gente:${icone.celula}:${icone.nivel}:${abaixo}`}
-              regiao={icone}
-              quantidade={icone.nivel}
-              // com o valor no centro, os bonequinhos descem para não cobri-lo
-              abaixoDoCentro={abaixo}
-            />
-          );
-        })}
+        icones.map((icone) => (
+          <BonequinhosDaRegiao
+            key={`gente:${icone.celula}:${icone.nivel}`}
+            regiao={icone}
+            quantidade={icone.nivel}
+          />
+        ))}
       {camadas.tarifas &&
-        desenhos.map(({ regiao, cores }) => (
-          <RotuloDaRegiao
-            key={`valor:${regiao.celula}:${regiao.rotulo}`}
-            regiao={regiao}
-            cor={cores.rotulo}
+        mapa.clusters?.map((cluster) => (
+          <SeloDinamico
+            key={`selo:${cluster.id}:${cluster.rotulo}`}
+            latitude={cluster.latitude}
+            longitude={cluster.longitude}
+            rotulo={cluster.rotulo}
           />
         ))}
     </>
@@ -133,11 +137,9 @@ function useRastrearPorUmMomento() {
 function BonequinhosDaRegiao({
   regiao,
   quantidade,
-  abaixoDoCentro,
 }: {
   regiao: { latitude: number; longitude: number };
   quantidade: number;
-  abaixoDoCentro: boolean;
 }) {
   const rastrear = useRastrearPorUmMomento();
   const { escuro } = useTema();
@@ -148,7 +150,7 @@ function BonequinhosDaRegiao({
       // o tema entra na chave de desenho: o marcador congela depois do 1º quadro
       key={escuro ? "escuro" : "claro"}
       coordinate={regiao}
-      anchor={{ x: 0.5, y: abaixoDoCentro ? -0.45 : 0.5 }}
+      anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={rastrear}
       tappable={false}
       zIndex={2}
@@ -168,42 +170,9 @@ function BonequinhosDaRegiao({
   );
 }
 
-function RotuloDaRegiao({
-  regiao,
-  cor,
-}: {
-  regiao: MapaDinamico["regioes"][number];
-  cor: string;
-}) {
-  const rastrear = useRastrearPorUmMomento();
-
-  return (
-    <Marker
-      coordinate={regiao}
-      anchor={{ x: 0.5, y: 0.5 }}
-      tracksViewChanges={rastrear}
-      // o toque cai no mapa, não neste rótulo
-      tappable={false}
-      zIndex={3}
-    >
-      <View style={[styles.rotulo, { backgroundColor: cor }]}>
-        <Text style={styles.texto}>{regiao.rotulo}</Text>
-      </View>
-    </Marker>
-  );
-}
-
 export default memo(RegioesDinamicas);
 
 const styles = StyleSheet.create({
-  rotulo: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#FFFFFF",
-  },
-  texto: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   bonequinhos: {
     flexDirection: "row",
     // sem fundo: só as silhuetas, para ocupar o mínimo do hexágono
