@@ -228,6 +228,14 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
   );
   const [grupo, setGrupo] = useState<GrupoDaViagem | null>(null);
   const grupoRef = useRef<GrupoDaViagem | null>(null);
+  // enquanto o servidor muda o status (conectar/desconectar), uma consulta
+  // antiga da situação não pode devolver a tela ao estado anterior
+  const mudandoStatusRef = useRef(false);
+  const disponivelRef = useRef(false);
+
+  useEffect(() => {
+    disponivelRef.current = disponivel;
+  }, [disponivel]);
   // o servidor recusa com 403 + situacao quando o cadastro ainda não foi
   // aprovado; a home usa isso para mandar o motorista para a liberação
   const [precisaLiberacao, setPrecisaLiberacao] = useState(false);
@@ -455,7 +463,7 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
         posicao: { latitude: number; longitude: number } | null;
       }>("/motorista/situacao");
 
-      setDisponivel(Boolean(data?.disponivel));
+      if (!mudandoStatusRef.current) setDisponivel(Boolean(data?.disponivel));
       aplicarCorrida(data?.corrida ?? null);
       if (data?.posicao) setPosicao(data.posicao);
       setPrecisaLiberacao(false);
@@ -495,6 +503,17 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
   const alternarDisponibilidade = useCallback(
     async (novoEstado: boolean) => {
       setOcupado(true);
+      mudandoStatusRef.current = true;
+      // desconectar responde na hora: o servidor pode demorar vários segundos e
+      // a tela ficava "online" como se o botão não tivesse funcionado. Se a
+      // chamada falhar, volta ao estado anterior.
+      const estavaDisponivel = disponivelRef.current;
+
+      if (!novoEstado) {
+        setDisponivel(false);
+        setOferta(null);
+        setOfertas([]);
+      }
 
       try {
         const posicao = novoEstado ? await posicaoAtual() : null;
@@ -531,6 +550,8 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
           chave: `disponibilidade:${novoEstado}`,
         });
       } catch (falha) {
+        if (!novoEstado) setDisponivel(estavaDisponivel);
+
         mostrarToast({
           tipo: "error",
           titulo: "Não foi possível mudar seu status",
@@ -540,6 +561,7 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
           ),
         });
       } finally {
+        mudandoStatusRef.current = false;
         setOcupado(false);
       }
     },
