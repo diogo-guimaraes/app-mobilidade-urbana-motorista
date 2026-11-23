@@ -1,3 +1,4 @@
+import { AZUL_DE_DESTAQUE } from "@/theme/azul";
 import { useTema } from "@/theme/tema";
 import { Text } from "@/components/common/Texto";
 import { Ionicons } from "@expo/vector-icons";
@@ -82,9 +83,11 @@ export default function MenuInferiorMotorista({
           elevation: 0,
         }
       : {
-          backgroundColor: bloqueado ? cores.neutro : "#FFD600",
+          backgroundColor: bloqueado ? cores.neutro : AZUL_DE_DESTAQUE,
         },
   ];
+  // texto branco no azul; no cinza de bloqueado segue o escuro de antes
+  const textoDoBotao = { color: !disponivel && !bloqueado ? "#fff" : "black" };
 
   return (
     <>
@@ -143,7 +146,7 @@ export default function MenuInferiorMotorista({
                 style={styles.carregando}
               />
             ) : (
-              <Text style={styles.connectTextLarge}>
+              <Text style={[styles.connectTextLarge, textoDoBotao]}>
                 {emCorrida ? "Em corrida" : "Conectar"}
               </Text>
             )}

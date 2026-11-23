@@ -1,6 +1,7 @@
 // Buscando.tsx
 import React, { useEffect, useState } from "react";
 import { Text } from "@/components/common/Texto";
+import { AZUL_DE_DESTAQUE } from "@/theme/azul";
 import { useTema } from "@/theme/tema";
 import {
   Animated,
@@ -235,7 +236,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 6,
     borderRadius: 999,
-    backgroundColor: "#FFD600", // amarelo similar ao design
+    backgroundColor: AZUL_DE_DESTAQUE,
     // sombra leve (iOS)
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
