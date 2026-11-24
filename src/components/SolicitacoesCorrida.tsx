@@ -30,6 +30,8 @@ interface Props {
   disponivel: boolean;
   carregando: boolean;
   ofertas: OfertaCorrida[];
+  // pedidos que acabaram de sair da lista: o card avisa que expirou
+  expiradas?: OfertaCorrida[];
   ocupado: boolean;
   onClose: () => void;
   onAtualizar: () => void;
@@ -58,6 +60,7 @@ export default function SolicitacoesCorrida({
   disponivel,
   carregando,
   ofertas,
+  expiradas = [],
   ocupado,
   onClose,
   onAtualizar,
@@ -113,14 +116,20 @@ export default function SolicitacoesCorrida({
   }, [duration, onAtualizar, translateX, visible, width]);
 
   const corridas = useMemo(() => {
-    const copia = [...ofertas];
+    const copia = [
+      ...ofertas,
+      ...expiradas.filter(
+        (expirada) =>
+          !ofertas.some((item) => item.corrida_id === expirada.corrida_id),
+      ),
+    ];
     copia.sort((a, b) =>
       ordenacao === "distancia"
         ? a.distancia_ate_origem_km - b.distancia_ate_origem_km
         : b.corrida_id - a.corrida_id,
     );
     return copia;
-  }, [ofertas, ordenacao]);
+  }, [ofertas, expiradas, ordenacao]);
 
   if (!isMounted) return null;
 
@@ -170,7 +179,7 @@ export default function SolicitacoesCorrida({
               ? "Nenhuma entrega"
               : corridas.length === 0
                 ? "Escolha uma"
-                : `${corridas.length} encontrada${corridas.length === 1 ? "" : "s"}`}
+                : `${corridas.length - expiradas.length} encontrada${corridas.length - expiradas.length === 1 ? "" : "s"}`}
           </Text>
           {aba === "corridas" ? (
             <TouchableOpacity
@@ -249,7 +258,12 @@ export default function SolicitacoesCorrida({
               item.valor_motorista / Math.max(item.distancia_corrida_km, 0.1);
 
             return (
-              <View style={[styles.card, pendente && styles.cardEsperando]}>
+              <View
+                style={[
+                  styles.card,
+                  (pendente || item.expirada_na_lista) && styles.cardEsperando,
+                ]}
+              >
                 <View style={styles.cardHeader}>
                   <View style={styles.categoriaChip}>
                     <Text style={styles.categoria}>
@@ -340,7 +354,14 @@ export default function SolicitacoesCorrida({
                   </View>
                 </View>
 
-                {pendente ? (
+                {item.expirada_na_lista ? (
+                  <View style={styles.expirou}>
+                    <Ionicons name="time-outline" size={20} color="#8B1717" />
+                    <Text style={styles.expirouTexto}>
+                      Pedido expirado: outro motorista aceitou
+                    </Text>
+                  </View>
+                ) : pendente ? (
                   <EsperaProposta
                     expiraEm={proposta?.expira_em}
                     onExpirar={aoExpirar}
@@ -413,12 +434,6 @@ export default function SolicitacoesCorrida({
                     )}
                   </>
                 )}
-
-                {carregando && corridas.length > 0 ? (
-                  <View style={styles.atualizando} pointerEvents="none">
-                    <Carregando3D tamanho={26} cor="#111" />
-                  </View>
-                ) : null}
               </View>
             );
           }}
@@ -527,6 +542,17 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   cardEsperando: { opacity: 0.72 },
+  expirou: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 20,
+    height: 53,
+    borderRadius: 13,
+    backgroundColor: "#FBE9E9",
+  },
+  expirouTexto: { color: "#8B1717", fontSize: 17, fontWeight: "700" },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -552,7 +578,7 @@ const styles = StyleSheet.create({
     gap: 7,
     marginTop: 5,
   },
-  valor: { color: "#111", fontSize: 29, fontWeight: "800" },
+  valor: { color: "#111", fontSize: 33, fontWeight: "800" },
   dinamicoChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -562,7 +588,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 3,
   },
-  dinamicoTexto: { color: "#C2410C", fontSize: 13, fontWeight: "800" },
+  dinamicoTexto: { color: "#C2410C", fontSize: 15, fontWeight: "800" },
   ganhosChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -572,13 +598,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#FFF9E5",
   },
-  ganhosTexto: { fontSize: 12, color: "#B48612" },
+  ganhosTexto: { fontSize: 14, color: "#B48612" },
   valorKm: {
     marginLeft: "auto",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 9,
-    fontSize: 12,
+    fontSize: 14,
     color: "#745C2A",
     backgroundColor: "#FFF7E4",
   },
@@ -588,15 +614,15 @@ const styles = StyleSheet.create({
     marginTop: 9,
     gap: 4,
   },
-  passageiroTexto: { fontSize: 14, color: "#6A6D73" },
-  separadorTexto: { color: "#A1A4A8" },
-  verificado: { fontSize: 13, color: "#71818F" },
+  passageiroTexto: { fontSize: 16, color: "#6A6D73" },
+  separadorTexto: { color: "#A1A4A8", fontSize: 16 },
+  verificado: { fontSize: 15, color: "#71818F" },
   rota: { marginTop: 17, gap: 15, position: "relative" },
   linhaVertical: {
     position: "absolute",
-    left: 8,
-    top: 15,
-    bottom: 16,
+    left: 10,
+    top: 20,
+    bottom: 20,
     width: 1,
     borderStyle: "dashed",
     borderWidth: 0.5,
@@ -608,23 +634,23 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   ponto: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 1,
+    marginTop: 3,
     zIndex: 2,
   },
   categoria: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "700",
     fontStyle: "italic",
     color: "#15A96C",
   },
   origem: { backgroundColor: "#20C99A" },
   destino: { backgroundColor: "#FF7849" },
-  endereco: { flex: 1, fontSize: 15, lineHeight: 20, color: "#222" },
+  endereco: { flex: 1, fontSize: 18, lineHeight: 25, color: "#222" },
   tempoEndereco: { fontWeight: "800" },
   recusar: {
     alignSelf: "center",
@@ -632,7 +658,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
   },
-  recusarTexto: { color: "#8B1717", fontWeight: "600" },
+  recusarTexto: { color: "#8B1717", fontWeight: "600", fontSize: 17 },
   aceitar: {
     height: 53,
     alignItems: "center",
@@ -641,10 +667,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFD400",
     marginTop: 20,
   },
-  aceitarTexto: { color: "#111", fontSize: 17, fontWeight: "800" },
+  aceitarTexto: { color: "#111", fontSize: 19, fontWeight: "800" },
   motivoNovaOferta: {
     marginTop: 18,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "600",
     color: "#8A5A00",
     textAlign: "center",
@@ -659,22 +685,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  sugestaoTexto: { fontSize: 15, fontWeight: "700", color: "#1B1B1B" },
+  sugestaoTexto: { fontSize: 17, fontWeight: "700", color: "#1B1B1B" },
   editarOferta: {
     width: 48,
     height: 46,
     borderRadius: 13,
     backgroundColor: "#F3F3F5",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  atualizando: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: "rgba(255,255,255,0.78)",
     alignItems: "center",
     justifyContent: "center",
   },

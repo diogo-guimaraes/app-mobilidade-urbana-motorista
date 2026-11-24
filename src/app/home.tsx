@@ -114,6 +114,7 @@ export default function Home() {
     disponivel,
     oferta,
     ofertas,
+    expiradas,
     carregandoOfertas,
     corrida,
     chegada,
@@ -962,12 +963,12 @@ export default function Home() {
               disponivel={disponivelExibido}
               carregando={carregandoOfertas}
               ofertas={ofertas}
+              expiradas={expiradas}
               ocupado={ocupadoExibido}
               onAtualizar={recarregarOfertas}
-              onAceitar={(corridaId) => {
-                setSolicitacoesCorrida(false);
-                void aceitar(corridaId);
-              }}
+              // a tela só fecha quando a corrida começa (efeito acima): se
+              // outro motorista levou, o card fica avisando que expirou
+              onAceitar={(corridaId) => void aceitar(corridaId)}
               onPropor={(corridaId, valorMotorista) =>
                 propor(corridaId, valorMotorista)
               }

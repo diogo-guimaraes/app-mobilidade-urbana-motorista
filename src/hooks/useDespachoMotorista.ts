@@ -17,6 +17,8 @@ const INTERVALO_BUSCA_COM_SOCKET_MS = 5000;
 const INTERVALO_POSICAO_MS = 8000;
 // quanto tempo o card fica na pilha dizendo que o passageiro recusou a oferta
 const RECUSA_VISIVEL_MS = 4000;
+// quanto tempo o card do pedido que expirou segue na lista de solicitações
+const EXPIRADA_VISIVEL_MS = 5000;
 
 const esperandoPassageiro = (item: OfertaCorrida) =>
   item.minha_proposta?.status === "pendente";
@@ -31,6 +33,7 @@ const chamadaDaVez = (
 ): OfertaCorrida | null =>
   lista.find(
     (item) =>
+      item.tocando !== false &&
       !item.recusada_localmente &&
       !aindaFora(dispensadas, item.corrida_id) &&
       !esperandoPassageiro(item),
@@ -76,6 +79,12 @@ export interface OfertaCorrida {
   passageiro_corridas: number;
   passageiro_novo?: boolean;
   recusada_localmente?: boolean;
+  // false: a chamada está com outro motorista da fila. Ela não toca, mas segue
+  // na lista de solicitações, onde o primeiro a aceitar leva.
+  tocando?: boolean;
+  // o pedido saiu da lista (outro motorista aceitou ou o passageiro desistiu):
+  // o card fica um instante avisando que expirou
+  expirada_na_lista?: boolean;
   // fila de prioridade: quanto tempo a chamada ainda toca para este motorista
   chamada_expira_em?: string;
   chamada_segundos?: number;
@@ -249,6 +258,23 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
   const [recusadasPeloPassageiro, setRecusadasPeloPassageiro] = useState<
     OfertaCorrida[]
   >([]);
+  // pedidos que saíram da lista de solicitações (outro motorista aceitou): o
+  // card fica uns segundos dizendo que expirou e depois some
+  const [expiradas, setExpiradas] = useState<OfertaCorrida[]>([]);
+  const ofertasAnteriores = useRef<OfertaCorrida[]>([]);
+  const marcarExpirada = useCallback((item: OfertaCorrida) => {
+    setExpiradas((atuais) => [
+      ...atuais.filter((outra) => outra.corrida_id !== item.corrida_id),
+      { ...item, expirada_na_lista: true },
+    ]);
+    setTimeout(
+      () =>
+        setExpiradas((atuais) =>
+          atuais.filter((outra) => outra.corrida_id !== item.corrida_id),
+        ),
+      EXPIRADA_VISIVEL_MS,
+    );
+  }, []);
   // fim de corrida: o valor que o motorista ganhou, para o "cha-ching" na tela
   const [ganhoRecebido, setGanhoRecebido] = useState<{
     corridaId: number;
@@ -608,7 +634,10 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
   useEffect(() => {
     // em corrida ou offline as propostas antigas não contam mais: ao voltar,
     // nada de aviso sobre elas
-    if (corrida !== null || !disponivel) esperandoAntes.current = new Map();
+    if (corrida !== null || !disponivel) {
+      esperandoAntes.current = new Map();
+      ofertasAnteriores.current = [];
+    }
     if (pausado || !appAtivo || !disponivel || corrida !== null) return;
 
     let cancelado = false;
@@ -644,6 +673,21 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
             );
           }
         });
+        // pedido que sumiu da lista sem proposta minha: outro motorista levou
+        // (ou o passageiro desistiu). Proposta esperando o passageiro tem o
+        // aviso próprio, mais abaixo.
+        ofertasAnteriores.current.forEach((anterior) => {
+          if (
+            atuais.some((item) => item.corrida_id === anterior.corrida_id) ||
+            esperandoPassageiro(anterior) ||
+            propostasMandadas.current.has(anterior.corrida_id) ||
+            corridaRef.current?.id === anterior.corrida_id
+          )
+            return;
+
+          marcarExpirada(anterior);
+        });
+        ofertasAnteriores.current = atuais;
         setOfertas(atuais);
         setOferta(chamadaDaVez(atuais, dispensadas.current));
 
@@ -777,6 +821,7 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
     carregarCorridaAtual,
     sincronizarSituacao,
     mostrarToast,
+    marcarExpirada,
   ]);
 
   // WebSocket em cima do polling: avisa que a lista mudou e o hook refaz a
@@ -937,6 +982,15 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
         setOfertas((atuais) =>
           atuais.filter((item) => item.corrida_id !== escolhida.corrida_id),
         );
+        ofertasAnteriores.current = ofertasAnteriores.current.filter(
+          (item) => item.corrida_id !== escolhida.corrida_id,
+        );
+        // outro motorista foi mais rápido: o card avisa que expirou
+        if (
+          (falha as { response?: { status?: number } })?.response?.status ===
+          409
+        )
+          marcarExpirada(escolhida);
         await sincronizarSituacao();
         await carregarCorridaAtual();
       } finally {
@@ -952,6 +1006,7 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
       mostrarToast,
       sincronizarSituacao,
       carregarCorridaAtual,
+      marcarExpirada,
     ],
   );
 
@@ -1429,6 +1484,7 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
     disponivel,
     oferta,
     ofertas,
+    expiradas,
     carregandoOfertas,
     corrida,
     chegada,
