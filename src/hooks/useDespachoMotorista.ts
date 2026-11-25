@@ -85,6 +85,9 @@ export interface OfertaCorrida {
   // o pedido saiu da lista (outro motorista aceitou ou o passageiro desistiu):
   // o card fica um instante avisando que expirou
   expirada_na_lista?: boolean;
+  // primeira vez que a corrida chega a este motorista: o card leva a tag Nova.
+  // Se ele ignora a chamada e ela volta a tocar, volta sem a tag.
+  nova?: boolean;
   // fila de prioridade: quanto tempo a chamada ainda toca para este motorista
   chamada_expira_em?: string;
   chamada_segundos?: number;
@@ -262,6 +265,10 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
   // card fica uns segundos dizendo que expirou e depois some
   const [expiradas, setExpiradas] = useState<OfertaCorrida[]>([]);
   const ofertasAnteriores = useRef<OfertaCorrida[]>([]);
+  // tag Nova: corridas que este motorista já recebeu alguma vez nunca voltam a
+  // ser novas; as novas perdem a tag quando ele dispensa a chamada ou ela sai
+  const corridasJaVistas = useRef<Set<number>>(new Set());
+  const corridasNovas = useRef<Set<number>>(new Set());
   const marcarExpirada = useCallback((item: OfertaCorrida) => {
     setExpiradas((atuais) => [
       ...atuais.filter((outra) => outra.corrida_id !== item.corrida_id),
@@ -655,9 +662,23 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
 
         if (cancelado) return;
 
-        const atuais = (data?.corridas ?? []).map((item) =>
+        const recebidas = data?.corridas ?? [];
+        recebidas.forEach((item) => {
+          if (corridasJaVistas.current.has(item.corrida_id)) return;
+          corridasJaVistas.current.add(item.corrida_id);
+          corridasNovas.current.add(item.corrida_id);
+        });
+        corridasNovas.current.forEach((id) => {
+          if (
+            !recebidas.some((item) => item.corrida_id === id) ||
+            dispensadas.current.has(id)
+          )
+            corridasNovas.current.delete(id);
+        });
+        const atuais = recebidas.map((item) =>
           comPrazoLocal({
             ...item,
+            nova: corridasNovas.current.has(item.corrida_id),
             recusada_localmente: aindaFora(recusadas.current, item.corrida_id),
           }),
         );
@@ -1180,6 +1201,9 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
     () => setGatilho((atual) => atual + 1),
     [],
   );
+  // puxar para atualizar: os avisos de "aceita por outro motorista" saem na hora
+  // e a lista fica só com o que o servidor ainda oferece
+  const limparExpiradas = useCallback(() => setExpiradas([]), []);
 
   const avancar = useCallback(
     async (acao: "cheguei" | "iniciar" | "confirmar-parada" | "finalizar") => {
@@ -1503,6 +1527,7 @@ export function useDespachoMotorista(pausado = false, semChamadas = false) {
     propostasPendentes,
     propostasNaPilha,
     recarregarOfertas,
+    limparExpiradas,
     avancar,
     cancelarCorrida,
     cancelarNaoComparecimento,

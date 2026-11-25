@@ -132,6 +132,7 @@ export default function Home() {
     propostasPendentes,
     propostasNaPilha,
     recarregarOfertas,
+    limparExpiradas,
     avancar,
     cancelarCorrida,
     cancelarNaoComparecimento,
@@ -966,6 +967,7 @@ export default function Home() {
               expiradas={expiradas}
               ocupado={ocupadoExibido}
               onAtualizar={recarregarOfertas}
+              onLimparExpiradas={limparExpiradas}
               // a tela só fecha quando a corrida começa (efeito acima): se
               // outro motorista levou, o card fica avisando que expirou
               onAceitar={(corridaId) => void aceitar(corridaId)}

@@ -12,10 +12,17 @@ import { enderecoCurto } from "@/domain/endereco";
 import { minutosEstimados, valoresSugeridos } from "@/domain/negocia";
 import { OfertaCorrida } from "@/hooks/useDespachoMotorista";
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   Animated,
   BackHandler,
+  Easing,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -35,6 +42,8 @@ interface Props {
   ocupado: boolean;
   onClose: () => void;
   onAtualizar: () => void;
+  // puxar para atualizar também tira os avisos de pedido que já foi levado
+  onLimparExpiradas?: () => void;
   onAceitar: (corridaId: number) => void;
   // Negocia: sem valor manda a oferta do passageiro; com valor, contraproposta
   onPropor: (
@@ -55,6 +64,29 @@ const textoDoDinamico = (dinamico: {
     ? `${dinamico.multiplicador.toFixed(1).replace(".", ",")}x · +${emReais(dinamico.valor)}`
     : `Dinâmico +${emReais(dinamico.valor)}`;
 
+// Cada chamada nova entra na lista deslizando pela lateral direita. A key
+// estável (corrida_id) faz o componente montar uma vez só: atualizar a lista
+// não repete a animação.
+function EntradaPeloLado({ children }: { children: ReactNode }) {
+  const { width } = useWindowDimensions();
+  const [deslocamento] = useState(() => new Animated.Value(width));
+
+  useEffect(() => {
+    Animated.timing(deslocamento, {
+      toValue: 0,
+      duration: 380,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [deslocamento]);
+
+  return (
+    <Animated.View style={{ transform: [{ translateX: deslocamento }] }}>
+      {children}
+    </Animated.View>
+  );
+}
+
 export default function SolicitacoesCorrida({
   visible,
   disponivel,
@@ -64,6 +96,7 @@ export default function SolicitacoesCorrida({
   ocupado,
   onClose,
   onAtualizar,
+  onLimparExpiradas,
   onAceitar,
   onPropor,
   onRecusar,
@@ -80,6 +113,13 @@ export default function SolicitacoesCorrida({
   const [ofertaNoModal, setOfertaNoModal] = useState<OfertaCorrida | null>(
     null,
   );
+  const [puxando, setPuxando] = useState(false);
+  const aoPuxar = useCallback(() => {
+    onLimparExpiradas?.();
+    onAtualizar();
+    setPuxando(true);
+    setTimeout(() => setPuxando(false), 900);
+  }, [onAtualizar, onLimparExpiradas]);
   const [, atualizarRelogio] = useState(0);
   const aoExpirar = useCallback(() => atualizarRelogio((n) => n + 1), []);
 
@@ -115,6 +155,17 @@ export default function SolicitacoesCorrida({
     }).start(({ finished }) => finished && setIsMounted(false));
   }, [duration, onAtualizar, translateX, visible, width]);
 
+  // Maior corrida que já estava na lista quando a tela abriu: tudo que chega
+  // depois (id maior) é novo e fica no topo, acima da ordenação escolhida.
+  const [idBase, setIdBase] = useState<number | null>(null);
+  const [visivelAntes, setVisivelAntes] = useState(visible);
+  if (visible !== visivelAntes) {
+    setVisivelAntes(visible);
+    if (visible) setIdBase(null);
+  } else if (idBase === null && visible && !carregando) {
+    setIdBase(Math.max(0, ...ofertas.map((item) => item.corrida_id)));
+  }
+
   const corridas = useMemo(() => {
     const copia = [
       ...ofertas,
@@ -123,13 +174,17 @@ export default function SolicitacoesCorrida({
           !ofertas.some((item) => item.corrida_id === expirada.corrida_id),
       ),
     ];
-    copia.sort((a, b) =>
-      ordenacao === "distancia"
+    const nova = (item: OfertaCorrida) =>
+      idBase !== null && item.corrida_id > idBase;
+    copia.sort((a, b) => {
+      if (nova(a) !== nova(b)) return nova(a) ? -1 : 1;
+      if (nova(a)) return b.corrida_id - a.corrida_id;
+      return ordenacao === "distancia"
         ? a.distancia_ate_origem_km - b.distancia_ate_origem_km
-        : b.corrida_id - a.corrida_id,
-    );
+        : b.corrida_id - a.corrida_id;
+    });
     return copia;
-  }, [ofertas, expiradas, ordenacao]);
+  }, [ofertas, expiradas, ordenacao, idBase]);
 
   if (!isMounted) return null;
 
@@ -208,8 +263,8 @@ export default function SolicitacoesCorrida({
           }
           refreshControl={
             <RefreshControl
-              refreshing={carregando && corridas.length === 0}
-              onRefresh={onAtualizar}
+              refreshing={puxando || (carregando && corridas.length === 0)}
+              onRefresh={aoPuxar}
               enabled={disponivel}
               colors={["#FFB800"]}
               tintColor="#FFB800"
@@ -258,183 +313,200 @@ export default function SolicitacoesCorrida({
               item.valor_motorista / Math.max(item.distancia_corrida_km, 0.1);
 
             return (
-              <View
-                style={[
-                  styles.card,
-                  (pendente || item.expirada_na_lista) && styles.cardEsperando,
-                ]}
-              >
-                <View style={styles.cardHeader}>
-                  <View style={styles.categoriaChip}>
-                    <Text style={styles.categoria}>
-                      {item.negociavel
-                        ? "Negocia Nova"
-                        : (item.categoria ?? "Corrida")}
-                    </Text>
-                  </View>
-                  <View style={styles.iconeMapa}>
-                    <Ionicons name="map-outline" size={24} color="#737983" />
-                  </View>
-                </View>
-
-                <View style={styles.precoLinha}>
-                  <Text style={styles.valor}>
-                    {emReais(item.valor_motorista)}
-                  </Text>
-                  {item.dinamico ? (
-                    <View style={styles.dinamicoChip}>
-                      <Ionicons name="flame" size={14} color="#E8590C" />
-                      <Text style={styles.dinamicoTexto}>
-                        {textoDoDinamico(item.dinamico)}
-                      </Text>
-                    </View>
-                  ) : null}
-                  {item.negociavel ? (
-                    <View style={styles.ganhosChip}>
-                      <Ionicons name="ribbon" size={14} color="#D69D00" />
-                      <Text style={styles.ganhosTexto}>100% dos ganhos</Text>
-                    </View>
-                  ) : null}
-                  <Text style={styles.valorKm}>
-                    {"R$" + valorKm.toFixed(2).replace(".", ",") + "/km"}
-                  </Text>
-                </View>
-
-                <View style={styles.passageiroLinha}>
-                  <Ionicons name="person-circle" size={20} color="#6B7078" />
-                  <Text style={styles.passageiroTexto}>
-                    {typeof item.passageiro_nota === "number"
-                      ? `${textoDaNota(item.passageiro_nota)} · `
-                      : ""}
-                    {textoDeCorridasDoPassageiro(
-                      item.passageiro_corridas,
-                      item.passageiro_novo,
-                    )}
-                  </Text>
-                  {item.metodo_pagamento === "cartao" ? (
-                    <>
-                      <Text style={styles.separadorTexto}>·</Text>
-                      <Ionicons
-                        name="shield-checkmark"
-                        size={16}
-                        color="#5893C6"
-                      />
-                      <Text style={styles.verificado}>Cartão verif.</Text>
-                    </>
-                  ) : null}
-                </View>
-
-                <View style={styles.rota}>
-                  <View style={styles.linhaVertical} />
-                  <View style={styles.enderecoLinha}>
-                    <View style={[styles.ponto, styles.origem]}>
-                      <Ionicons name="arrow-up" size={10} color="#FFF" />
-                    </View>
-                    <Text style={styles.endereco} numberOfLines={2}>
-                      <Text style={styles.tempoEndereco}>
-                        ({minutosEmbarque} min{" "}
-                        {emKm(item.distancia_ate_origem_km)}){" "}
-                      </Text>
-                      {enderecoCurto(item.origem)}
-                    </Text>
-                  </View>
-                  <View style={styles.enderecoLinha}>
-                    <View style={[styles.ponto, styles.destino]}>
-                      <Ionicons name="arrow-down" size={10} color="#FFF" />
-                    </View>
-                    <Text style={styles.endereco} numberOfLines={2}>
-                      <Text style={styles.tempoEndereco}>
-                        ({minutosCorrida} min {emKm(item.distancia_corrida_km)}
-                        ){" "}
-                      </Text>
-                      {item.destino
-                        ? enderecoCurto(item.destino)
-                        : "Destino não informado"}
-                    </Text>
-                  </View>
-                </View>
-
-                {item.expirada_na_lista ? (
-                  <View style={styles.expirou}>
-                    <Ionicons name="time-outline" size={20} color="#8B1717" />
-                    <Text style={styles.expirouTexto}>
-                      Pedido expirado: outro motorista aceitou
-                    </Text>
-                  </View>
-                ) : pendente ? (
-                  <EsperaProposta
-                    expiraEm={proposta?.expira_em}
-                    onExpirar={aoExpirar}
-                  />
-                ) : (
-                  <>
-                    {expirada ? (
-                      <Text style={styles.motivoNovaOferta}>
-                        {proposta?.status === "recusada"
-                          ? "O passageiro recusou sua proposta. Ofereça de novo:"
-                          : "Sua proposta expirou sem resposta. Ofereça de novo:"}
-                      </Text>
-                    ) : null}
-                    <TouchableOpacity
-                      style={[
-                        styles.aceitar,
-                        expirada && styles.aceitarComMotivo,
-                      ]}
-                      disabled={ocupado || item.recusada_localmente}
-                      onPress={() =>
-                        item.negociavel
-                          ? void onPropor(item.corrida_id)
-                          : onAceitar(item.corrida_id)
-                      }
-                    >
-                      <Text style={styles.aceitarTexto}>
-                        {item.negociavel
-                          ? `Aceitar por ${emReais(item.valor_motorista)}`
-                          : "Aceitar corrida"}
-                      </Text>
-                    </TouchableOpacity>
-
-                    {item.negociavel ? (
-                      <View style={styles.sugestoes}>
-                        {valoresSugeridos(item.valor_motorista).map(
-                          (sugerido) => (
-                            <TouchableOpacity
-                              key={sugerido}
-                              style={styles.sugestao}
-                              onPress={() =>
-                                void onPropor(item.corrida_id, sugerido)
-                              }
-                              disabled={ocupado}
-                            >
-                              <Text style={styles.sugestaoTexto}>
-                                {emReais(sugerido)}
-                              </Text>
-                            </TouchableOpacity>
-                          ),
-                        )}
-                        <TouchableOpacity
-                          style={styles.editarOferta}
-                          onPress={() => setOfertaNoModal(item)}
-                          accessibilityLabel="Editar oferta"
-                        >
-                          <Ionicons
-                            name="pencil-outline"
-                            size={21}
-                            color="#111"
-                          />
-                        </TouchableOpacity>
+              <EntradaPeloLado>
+                <View style={[styles.card, pendente && styles.cardEsperando]}>
+                  <View
+                    style={item.expirada_na_lista ? styles.apagado : undefined}
+                  >
+                    <View style={styles.cardHeader}>
+                      <View style={styles.chipsCabecalho}>
+                        <View style={styles.categoriaChip}>
+                          <Text style={styles.categoria}>
+                            {item.negociavel
+                              ? "Negocia Nova"
+                              : (item.categoria ?? "Corrida")}
+                          </Text>
+                        </View>
+                        {item.nova && !item.expirada_na_lista ? (
+                          <View style={styles.categoriaChip}>
+                            <Text style={styles.categoria}>Nova</Text>
+                          </View>
+                        ) : null}
                       </View>
-                    ) : (
+                      <View style={styles.iconeMapa}>
+                        <Ionicons
+                          name="map-outline"
+                          size={24}
+                          color="#737983"
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.precoLinha}>
+                      <Text style={styles.valor}>
+                        {emReais(item.valor_motorista)}
+                      </Text>
+                      {item.dinamico ? (
+                        <View style={styles.dinamicoChip}>
+                          <Ionicons name="flame" size={14} color="#E8590C" />
+                          <Text style={styles.dinamicoTexto}>
+                            {textoDoDinamico(item.dinamico)}
+                          </Text>
+                        </View>
+                      ) : null}
+                      {item.negociavel ? (
+                        <View style={styles.ganhosChip}>
+                          <Ionicons name="ribbon" size={14} color="#D69D00" />
+                          <Text style={styles.ganhosTexto}>
+                            100% dos ganhos
+                          </Text>
+                        </View>
+                      ) : null}
+                      <Text style={styles.valorKm}>
+                        {"R$" + valorKm.toFixed(2).replace(".", ",") + "/km"}
+                      </Text>
+                    </View>
+
+                    <View style={styles.passageiroLinha}>
+                      <Ionicons
+                        name="person-circle"
+                        size={20}
+                        color="#6B7078"
+                      />
+                      <Text style={styles.passageiroTexto}>
+                        {typeof item.passageiro_nota === "number"
+                          ? `${textoDaNota(item.passageiro_nota)} · `
+                          : ""}
+                        {textoDeCorridasDoPassageiro(
+                          item.passageiro_corridas,
+                          item.passageiro_novo,
+                        )}
+                      </Text>
+                      {item.metodo_pagamento === "cartao" ? (
+                        <>
+                          <Text style={styles.separadorTexto}>·</Text>
+                          <Ionicons
+                            name="shield-checkmark"
+                            size={16}
+                            color="#5893C6"
+                          />
+                          <Text style={styles.verificado}>Cartão verif.</Text>
+                        </>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.rota}>
+                      <View style={styles.linhaVertical} />
+                      <View style={styles.enderecoLinha}>
+                        <View style={[styles.ponto, styles.origem]}>
+                          <Ionicons name="arrow-up" size={10} color="#FFF" />
+                        </View>
+                        <Text style={styles.endereco} numberOfLines={2}>
+                          <Text style={styles.tempoEndereco}>
+                            ({minutosEmbarque} min{" "}
+                            {emKm(item.distancia_ate_origem_km)}){" "}
+                          </Text>
+                          {enderecoCurto(item.origem)}
+                        </Text>
+                      </View>
+                      <View style={styles.enderecoLinha}>
+                        <View style={[styles.ponto, styles.destino]}>
+                          <Ionicons name="arrow-down" size={10} color="#FFF" />
+                        </View>
+                        <Text style={styles.endereco} numberOfLines={2}>
+                          <Text style={styles.tempoEndereco}>
+                            ({minutosCorrida} min{" "}
+                            {emKm(item.distancia_corrida_km)}){" "}
+                          </Text>
+                          {item.destino
+                            ? enderecoCurto(item.destino)
+                            : "Destino não informado"}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {item.expirada_na_lista ? (
+                    <View style={styles.expirou}>
+                      <Text style={styles.expirouTexto}>
+                        Esta corrida foi aceita por outro motorista
+                      </Text>
+                    </View>
+                  ) : pendente ? (
+                    <EsperaProposta
+                      expiraEm={proposta?.expira_em}
+                      onExpirar={aoExpirar}
+                    />
+                  ) : (
+                    <>
+                      {expirada ? (
+                        <Text style={styles.motivoNovaOferta}>
+                          {proposta?.status === "recusada"
+                            ? "O passageiro recusou sua proposta. Ofereça de novo:"
+                            : "Sua proposta expirou sem resposta. Ofereça de novo:"}
+                        </Text>
+                      ) : null}
                       <TouchableOpacity
-                        style={styles.recusar}
-                        onPress={() => onRecusar(item.corrida_id)}
+                        style={[
+                          styles.aceitar,
+                          expirada && styles.aceitarComMotivo,
+                        ]}
+                        disabled={ocupado || item.recusada_localmente}
+                        onPress={() =>
+                          item.negociavel
+                            ? void onPropor(item.corrida_id)
+                            : onAceitar(item.corrida_id)
+                        }
                       >
-                        <Text style={styles.recusarTexto}>Recusar</Text>
+                        <Text style={styles.aceitarTexto}>
+                          {item.negociavel
+                            ? `Aceitar por ${emReais(item.valor_motorista)}`
+                            : "Aceitar corrida"}
+                        </Text>
                       </TouchableOpacity>
-                    )}
-                  </>
-                )}
-              </View>
+
+                      {item.negociavel ? (
+                        <View style={styles.sugestoes}>
+                          {valoresSugeridos(item.valor_motorista).map(
+                            (sugerido) => (
+                              <TouchableOpacity
+                                key={sugerido}
+                                style={styles.sugestao}
+                                onPress={() =>
+                                  void onPropor(item.corrida_id, sugerido)
+                                }
+                                disabled={ocupado}
+                              >
+                                <Text style={styles.sugestaoTexto}>
+                                  {emReais(sugerido)}
+                                </Text>
+                              </TouchableOpacity>
+                            ),
+                          )}
+                          <TouchableOpacity
+                            style={styles.editarOferta}
+                            onPress={() => setOfertaNoModal(item)}
+                            accessibilityLabel="Editar oferta"
+                          >
+                            <Ionicons
+                              name="pencil-outline"
+                              size={21}
+                              color="#111"
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.recusar}
+                          onPress={() => onRecusar(item.corrida_id)}
+                        >
+                          <Text style={styles.recusarTexto}>Recusar</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  )}
+                </View>
+              </EntradaPeloLado>
             );
           }}
         />
@@ -542,22 +614,23 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   cardEsperando: { opacity: 0.72 },
+  // conteúdo do card que perdeu a corrida: some no fundo, só o aviso fica forte
+  apagado: { opacity: 0.4 },
   expirou: {
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
     marginTop: 20,
     height: 53,
     borderRadius: 13,
-    backgroundColor: "#FBE9E9",
+    backgroundColor: "#F1F1F3",
   },
-  expirouTexto: { color: "#8B1717", fontSize: 17, fontWeight: "700" },
+  expirouTexto: { color: "#E5314A", fontSize: 17, fontWeight: "700" },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
+  chipsCabecalho: { flexDirection: "row", alignItems: "center", gap: 8 },
   categoriaChip: {
     paddingHorizontal: 10,
     paddingVertical: 4,
